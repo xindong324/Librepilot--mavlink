@@ -1,6 +1,6 @@
 DEB_DIST             := $(shell lsb_release -c -s)
 # Instead of RELEASE-15.01-RC1 debian wants 15.01~RC1
-UPSTREAM_VER         := 16.09#$(subst -,~,$(subst RELEASE-,,$(PACKAGE_LBL)))
+UPSTREAM_VER         := $(subst -,~,$(subst RELEASE-,,$(PACKAGE_LBL)))
 ifeq ($(DEB_DIST), unstable) # This should be set manually for a submission to Debian or similar
 DEB_REV              := 1
 else

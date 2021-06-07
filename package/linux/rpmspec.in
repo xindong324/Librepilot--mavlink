@@ -1,6 +1,7 @@
 Name:           <NAME>
 Summary:        <SUMMARY>
-Version:        <VERSION>
+% Version:        <VERSION>
+Version:        1601
 Release:        <RELEASE>%{?dist}
 
 Group:          Applications/Scientific

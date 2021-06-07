@@ -48,6 +48,7 @@
 #include "systemstats.h"
 #include "homelocation.h"
 #include "positionstate.h"
+#include "optipositionstate.h"
 #include "velocitystate.h"
 #include "taskinfo.h"
 #include "mavlink.h"
@@ -156,6 +157,7 @@ static int32_t uavoMavlinkBridgeStart(void)
         // Start tasks
         xTaskHandle taskHandle;
 		xTaskHandle rxtaskHandle;
+		
         xTaskCreate(uavoMavlinkBridgeTask, "uavoMavlinkBridge", STACK_SIZE_BYTES / 4, NULL, TASK_PRIORITY, &taskHandle);
         PIOS_TASK_MONITOR_RegisterTask(TASKINFO_RUNNING_UAVOMAVLINKBRIDGE, taskHandle);
 
@@ -175,7 +177,7 @@ static int32_t uavoMavlinkBridgeInitialize(void)
 {
     if (PIOS_COM_MAVLINK) {
         updateSettings();
-
+		OptiPositionStateInitialize();
         mav_msg = pios_malloc(sizeof(*mav_msg));
         stream_ticks = pios_malloc(MAXSTREAMS);
 
@@ -683,15 +685,16 @@ static void handleMessage(mavlink_message_t *msg)
             break;
         }
 		case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE: {
-			PositionStateData positionState;
+			OptiPositionStateData optipositionState;
 
     		//PositionStateGet(&positionState);
 			mavlink_vicon_position_estimate_t vicon_pose;
+			DEBUG_PRINTF(2,"px: %d",(int)(100*vicon_pose.x));
 			mavlink_msg_vicon_position_estimate_decode(msg,&vicon_pose);
-			positionState.North = vicon_pose.x;
-			positionState.East  = vicon_pose.y;
-			positionState.Down  = vicon_pose.z;
-			PositionStateSet(&positionState);
+			optipositionState.North = vicon_pose.x;
+			optipositionState.East  = vicon_pose.y;
+			optipositionState.Down  = vicon_pose.z;
+			OptiPositionStateSet(&optipositionState);
 			break;
 		}
         

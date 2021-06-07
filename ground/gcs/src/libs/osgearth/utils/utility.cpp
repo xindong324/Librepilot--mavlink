@@ -479,7 +479,8 @@ bool clampGeoPoint(osgEarth::GeoPoint &geoPoint, float offset, osgEarth::MapNode
 
     bool clamped = false;
     double elevation;
-    if (eq.getElevation(geoPoint, elevation, 0.0)) {
+    double tmp = 0.0;
+    if (eq.getElevation(geoPoint, elevation, &tmp)) {
         clamped = ((geoPoint.z() - offset) < elevation);
         if (clamped) {
             // qDebug() << "Utility::clampGeoPoint - clamping" << geoPoint.z() - offset << "/" << elevation;
