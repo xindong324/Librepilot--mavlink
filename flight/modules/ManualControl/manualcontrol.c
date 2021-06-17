@@ -46,6 +46,11 @@
 #include <stabilizationdesired.h>
 #include <callbackinfo.h>
 #include <stabilizationsettings.h>
+#include <optipositionstate.h>
+#include <optivelocitystate.h> 
+#include <optisetpoint.h>
+#include <optisetpointsettings.h>
+
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 #include <vtolpathfollowersettings.h>
 #endif /* ifndef PIOS_EXCLUDE_ADVANCED_FEATURES */
@@ -66,6 +71,9 @@
 
 #define ALWAYSTABILIZEACCESSORY_THRESHOLD              0.05f
 
+MaxPosVelLimit maxPosVelLimit;
+// up velocity is bigger than down
+const float reduceFactorVelUp2Down = 0.6f;
 // defined handlers
 
 static const controlHandler handler_MANUAL = {
@@ -85,8 +93,6 @@ static const controlHandler handler_STABILIZED = {
     .handler           = &stabilizedHandler,
 };
 
-
-#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 static const controlHandler handler_PATHFOLLOWER = {
     .controlChain      = {
         .Stabilization = true,
@@ -96,6 +102,17 @@ static const controlHandler handler_PATHFOLLOWER = {
     .handler           = &pathFollowerHandler,
 };
 
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
+/*
+static const controlHandler handler_PATHFOLLOWER = {
+    .controlChain      = {
+        .Stabilization = true,
+        .PathFollower  = true,
+        .PathPlanner   = false,
+    },
+    .handler           = &pathFollowerHandler,
+};
+*/
 static const controlHandler handler_PATHPLANNER = {
     .controlChain      = {
         .Stabilization = true,
@@ -115,6 +132,7 @@ static FrameType_t frameType = FRAME_TYPE_MULTIROTOR;
 
 // Private functions
 static void configurationUpdatedCb(UAVObjEvent *ev);
+
 static void commandUpdatedCb(UAVObjEvent *ev);
 static void manualControlTask(void);
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
@@ -134,7 +152,8 @@ int32_t ManualControlStart()
     ManualControlSettingsConnectCallback(configurationUpdatedCb);
     FlightModeSettingsConnectCallback(configurationUpdatedCb);
     ManualControlCommandConnectCallback(commandUpdatedCb);
-
+	
+	OptiSetpointSettingsConnectCallback(SettingsUpdatedCb);
     // Run this initially to make sure the configuration is checked
     configuration_check();
 
@@ -171,6 +190,12 @@ int32_t ManualControlInitialize()
     SystemSettingsInitialize();
     StabilizationSettingsInitialize();
     AccessoryDesiredInitialize();
+
+	OptiPositionStateInitialize();
+	OptiVelocityStateInitialize();
+	OptiSetpointInitialize();
+	OptiSetpointSettingsInitialize();
+	
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
     VtolSelfTuningStatsInitialize();
     VtolPathFollowerSettingsInitialize();
@@ -186,6 +211,21 @@ MODULE_INITCALL(ManualControlInitialize, ManualControlStart);
 static void SettingsUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
     frameType = GetCurrentFrameType();
+	
+	
+	OptiSetpointSettingsData OptiSetpointSettings;
+	OptiSetpointSettingsGet(&OptiSetpointSettings);
+
+	maxPosVelLimit.MaxVelocityNorth = OptiSetpointSettings.OptiSpeedMax.North;
+	maxPosVelLimit.MaxVelocityEast = OptiSetpointSettings.OptiSpeedMax.East;
+	maxPosVelLimit.MaxVelocityDown = OptiSetpointSettings.OptiSpeedMax.Down;
+	maxPosVelLimit.MaxVelocityUp = maxPosVelLimit.MaxVelocityDown/reduceFactorVelUp2Down;
+	maxPosVelLimit.MaxPositionNorth = OptiSetpointSettings.OptiPositionMax.North;
+	maxPosVelLimit.MaxPositionEast = OptiSetpointSettings.OptiPositionMax.East;
+	maxPosVelLimit.MaxPositionDown = OptiSetpointSettings.OptiPositionMax.Down;
+	//DEBUG_PRINTF(2,"set maxvel %d\n",(int)(maxPosVelLimit.MaxVelocityDown*10));
+	
+	
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
     VtolPathFollowerSettingsTreatCustomCraftAsOptions TreatCustomCraftAs;
     VtolPathFollowerSettingsTreatCustomCraftAsGet(&TreatCustomCraftAs);
@@ -214,6 +254,7 @@ static void manualControlTask(void)
 {
     // Process Arming
     armHandler(false, frameType);
+	// DEBUG_PRINTF(2,"MANNUAL IN \n");
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
     takeOffLocationHandler();
 #endif /* ifndef PIOS_EXCLUDE_ADVANCED_FEATURES */
@@ -269,6 +310,10 @@ static void manualControlTask(void)
     case FLIGHTSTATUS_FLIGHTMODE_MANUAL:
         handler = &handler_MANUAL;
         break;
+	case FLIGHTSTATUS_FLIGHTMODE_OPTIPOSHOLD:
+		DEBUG_PRINTF(2,"BEFORE PATH\n");
+		//handler = &handler_PATHFOLLOWER;
+		break;
     case FLIGHTSTATUS_FLIGHTMODE_STABILIZED1:
     case FLIGHTSTATUS_FLIGHTMODE_STABILIZED2:
     case FLIGHTSTATUS_FLIGHTMODE_STABILIZED3:
@@ -278,7 +323,10 @@ static void manualControlTask(void)
 #if !defined(PIOS_EXCLUDE_ADVANCED_FEATURES)
     case FLIGHTSTATUS_FLIGHTMODE_AUTOTUNE:
 #endif /* ifndef PIOS_EXCLUDE_ADVANCED_FEATURES */
+		//DEBUG_PRINTF(2,"stab\n");
+
         handler = &handler_STABILIZED;
+	
 
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
         newFlightModeAssist = isAssistedFlightMode(position, newMode, &modeSettings);
@@ -418,6 +466,7 @@ static void manualControlTask(void)
         }
 #endif /* ifndef PIOS_EXCLUDE_ADVANCED_FEATURES */
         break;
+	
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 
     // During development the assistedcontrol implementation is optional and set
@@ -533,6 +582,8 @@ static void configurationUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
     configuration_check();
 }
+
+
 
 /**
  * Called whenever a critical configuration component changes

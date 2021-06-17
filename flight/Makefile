@@ -9,6 +9,7 @@ export FLIGHT_OUT_DIR  ?= $(CURDIR)
 
 # Define supported board lists
 ALL_BOARDS    := coptercontrol oplinkmini revolution osd revoproto simposix discoveryf4bare gpsplatinum revonano sparky2
+#ALL_BOARDS    := revolution revonano sparky2
 
 # Short names of each board (used to display board name in parallel builds)
 coptercontrol_short    := 'cc  '

@@ -4,6 +4,8 @@
         <field name="North" units="m" type="float" elements="1"/>
         <field name="East" units="m" type="float" elements="1"/>
         <field name="Down" units="m" type="float" elements="1"/>
+        <field name="OptiDataVaild" units="" type="enum" elements="1" options="False,True" defaultvalue="False"
+               description="isOptiData vaild"/> 
         <access gcs="readwrite" flight="readwrite"/>
         <telemetrygcs acked="false" updatemode="manual" period="0"/>
         <telemetryflight acked="false" updatemode="periodic" period="1000"/>

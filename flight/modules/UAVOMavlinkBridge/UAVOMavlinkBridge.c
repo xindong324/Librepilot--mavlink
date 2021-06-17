@@ -175,9 +175,10 @@ static int32_t uavoMavlinkBridgeStart(void)
  */
 static int32_t uavoMavlinkBridgeInitialize(void)
 {
+	OptiPositionStateInitialize();
     if (PIOS_COM_MAVLINK) {
         updateSettings();
-		OptiPositionStateInitialize();
+		
         mav_msg = pios_malloc(sizeof(*mav_msg));
         stream_ticks = pios_malloc(MAXSTREAMS);
 
@@ -525,6 +526,7 @@ static void mavlink_send_extra2()
 
     switch (flightStatus.FlightMode) {
     case FLIGHTSTATUS_FLIGHTMODE_POSITIONHOLD:
+	case FLIGHTSTATUS_FLIGHTMODE_OPTIPOSHOLD:
         custom_mode = CUSTOM_MODE_PHLD;
         break;
 
@@ -686,10 +688,9 @@ static void handleMessage(mavlink_message_t *msg)
         }
 		case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE: {
 			OptiPositionStateData optipositionState;
-
-    		//PositionStateGet(&positionState);
 			mavlink_vicon_position_estimate_t vicon_pose;
 			DEBUG_PRINTF(2,"px: %d",(int)(100*vicon_pose.x));
+			
 			mavlink_msg_vicon_position_estimate_decode(msg,&vicon_pose);
 			optipositionState.North = vicon_pose.x;
 			optipositionState.East  = vicon_pose.y;

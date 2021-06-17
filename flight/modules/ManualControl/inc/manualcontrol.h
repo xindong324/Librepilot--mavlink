@@ -41,6 +41,18 @@ typedef struct controlHandlerStruct {
     handlerFunc handler;
 } controlHandler;
 
+typedef struct MaxPosVelLimitStruct{
+	float MaxVelocityNorth;
+	float MaxVelocityEast;
+	float MaxVelocityDown;//up velocity big than down;
+	float MaxVelocityUp; 
+	float MaxPositionNorth;
+	float MaxPositionEast;
+	float MaxPositionDown;
+}MaxPosVelLimit;
+
+extern MaxPosVelLimit maxPosVelLimit;
+
 /**
  * @brief Handler to interprete Command inputs in regards to arming/disarming (called in all flight modes)
  * @input: ManualControlCommand, AccessoryDesired

@@ -72,13 +72,13 @@ if (eq.getElevation(geoPoint, elevation, &tmp))
 
 
 1. 创建UAVObject描述文件（xx.xml)，并存放到\librepilot\shared\uavobjectdefinition目录中；
-2. 在\librepilot\flight\targets\boards\（xxx飞控板）\firmware\UAVObjects.inc中加入新创建的.xml文件名，以便生成飞机端的.c和.h文件；
+2. 在\librepilot\flight\targets\boards\（xxx飞控板）\firmware\UAVObjects.inc中加入新创建的.xml文件名，以便生成飞机端的.c和.h文件；注意coptercontrol没有UAVObjects.inc，定义在firmware\Makefile中
 3. 在\librepilot\ground\gcs\src\plugins\uavobjects\uavobjects.pro中加入新创建的.xml文件名，以便生成地面站端的.cpp和.h文件；
 
 4、在\librepilot\flight\targets\boards\（xxx飞控板）\firmware\Makefile中加入相应的模块，如MODULES += XXX；（如果新建模块的话）
 
 5. make package 生成安装包；
-生成安装包时需要在所有飞控版的文件夹相应文件中加入定义的下xml文件，默认版本生成安装包时会报version is not number的错误,这是因为自己删除了librepilot的默认git上传到自己的git后UPSTREAM_VER返回None导致的，解决办法是把当前版本16.09直接赋值  
+生成安装包时需要在所有飞控版的文件夹相应文件中加入定义的uavobjectxml文件，默认版本生成安装包时会报version is not number的错误,这是因为自己删除了librepilot的默认git上传到自己的git后UPSTREAM_VER返回None导致的，解决办法是把当前版本16.09直接赋值  
 对Ubuntu18 找到 librepilot/package/linux/deb.mk 中，UPASTREAM_VER改为  
 ```
 UPSTREAM_VER         := 16.09  #$(subst -,~,$(subst RELEASE-,,$(PACKAGE_LBL)))
@@ -90,4 +90,50 @@ UPSTREAM_VER         := 16.09  #$(subst -,~,$(subst RELEASE-,,$(PACKAGE_LBL)))
  # VIProductVersion ${VERSION_FOUR_NUM}
 VIProductVersion "2.46.0.0"
 ```
+# uavobject 定义的注意事项
+## 定义单个变量，数组和结构体的区别：
+1. 定义变量, elements="1"
+```
+<field name="Yaw" units="degrees" type="float" elements="1"/>
 
+```
+生成结果为:  
+```C++
+float Yaw;
+```
+
+2. 定义数组, elements="4"
+```
+<field name="ModeParameters" units="" type="float" elements="4" default="0"/>
+
+```
+生成结果为：
+```C
+float ModeParameters[4];
+
+```
+
+3. 定义结构体， elementnames="North,East,Down",是elementnames不是elements
+```
+<field name="Start" units="m" type="float" elementnames="North,East,Down" default="0"/>
+
+```
+
+生成结果为：
+```
+typedef struct __attribute__ ((__packed__)) {
+    float North;
+    float East;
+    float Down;
+}  PathDesiredStartData ;
+
+```
+
+
+#只编译飞控固件的纯净版
+1. librepilot/flight/targets/Boards中其他飞控文件夹删除
+2. librepilot/Makefile 11行删掉不用的boards定义
+```
+ALL_BOARDS    := coptercontrol oplinkmini revolution osd revoproto simposix discoveryf4bare gpsplatinum revonano sparky2
+```
+3. NB: 这样无法编译地面站

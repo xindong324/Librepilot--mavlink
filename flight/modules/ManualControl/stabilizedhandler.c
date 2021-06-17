@@ -37,6 +37,10 @@
 #include <flightmodesettings.h>
 #include <stabilizationbank.h>
 #include <flightstatus.h>
+#include <optipositionstate.h>
+#include <optivelocitystate.h>
+#include <optisetpoint.h>
+#include <optisetpointsettings.h>
 
 // Private constants
 
@@ -44,12 +48,23 @@
 
 // Private functions
 static float applyExpo(float value, float expo);
+static void handlePosHold(ManualControlCommandData cmd);
 
 // Private variables
 static uint8_t currentFpvTiltAngle = 0;
 static float cosAngle = 0.0f;
 static float sinAngle = 0.0f;
 
+// position handler variable;
+static int adjustPosXYTime = 0;
+static bool isAdjustingPosXY = true;
+static bool isAdjustingPosZ = false;
+static float errorPosX = 0.f;
+static float errorPosY = 0.f;
+static float errorPosZ = 0.f;
+
+// threshold to avoid noise when poshold;
+#define STICK_POSHOLD_THRES (0.03f)
 
 static float applyExpo(float value, float expo)
 {
@@ -155,69 +170,107 @@ void stabilizedHandler(__attribute__((unused)) bool newinit)
         stab_settings = (uint8_t *)FlightModeSettingsStabilization1SettingsToArray(settings.Stabilization1Settings);
         return;
     }
-
-    stabilization.Roll =
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_MANUAL) ? cmd.Roll :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATE) ? cmd.Roll * stabSettings.ManualRate.Roll :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATETRAINER) ? cmd.Roll * stabSettings.ManualRate.Roll :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_WEAKLEVELING) ? cmd.Roll * stabSettings.RollMax :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Roll * stabSettings.RollMax :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_AXISLOCK) ? cmd.Roll * stabSettings.ManualRate.Roll :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_VIRTUALBAR) ? cmd.Roll :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_ACRO) ? cmd.Roll * stabSettings.ManualRate.Roll :
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATTITUDE) ? cmd.Roll * stabSettings.RollMax :
-#if !defined(PIOS_EXCLUDE_ADVANCED_FEATURES)
-        (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_SYSTEMIDENT) ? cmd.Roll * stabSettings.RollMax :
-#endif /* !defined(PIOS_EXCLUDE_ADVANCED_FEATURES) */
-        0; // this is an invalid mode
-
-    stabilization.Pitch =
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_MANUAL) ? cmd.Pitch :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATE) ? cmd.Pitch * stabSettings.ManualRate.Pitch :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATETRAINER) ? cmd.Pitch * stabSettings.ManualRate.Pitch :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_WEAKLEVELING) ? cmd.Pitch * stabSettings.PitchMax :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Pitch * stabSettings.PitchMax :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_AXISLOCK) ? cmd.Pitch * stabSettings.ManualRate.Pitch :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_VIRTUALBAR) ? cmd.Pitch :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_ACRO) ? cmd.Pitch * stabSettings.ManualRate.Pitch :
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATTITUDE) ? cmd.Pitch * stabSettings.PitchMax :
-#if !defined(PIOS_EXCLUDE_ADVANCED_FEATURES)
-        (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_SYSTEMIDENT) ? cmd.Pitch * stabSettings.PitchMax :
-#endif /* !defined(PIOS_EXCLUDE_ADVANCED_FEATURES) */
-        0; // this is an invalid mode
-
-    // TOOD: Add assumption about order of stabilization desired and manual control stabilization mode fields having same order
-    stabilization.StabilizationMode.Roll  = stab_settings[0];
-    stabilization.StabilizationMode.Pitch = stab_settings[1];
-    // Other axes (yaw) cannot be Rattitude, so use Rate
-    // Should really do this for Attitude mode as well?
-    if (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATTITUDE) {
-        stabilization.StabilizationMode.Yaw = STABILIZATIONDESIRED_STABILIZATIONMODE_RATE;
-        stabilization.Yaw = cmd.Yaw * stabSettings.ManualRate.Yaw;
-    } else {
-        stabilization.StabilizationMode.Yaw = stab_settings[2];
-        stabilization.Yaw =
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_MANUAL) ? cmd.Yaw :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATE) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATETRAINER) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_WEAKLEVELING) ? cmd.Yaw * stabSettings.YawMax :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Yaw * stabSettings.YawMax :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_AXISLOCK) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_VIRTUALBAR) ? cmd.Yaw :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_ACRO) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATTITUDE) ? cmd.Yaw * stabSettings.YawMax :
-#if !defined(PIOS_EXCLUDE_ADVANCED_FEATURES)
-            (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_SYSTEMIDENT) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
-#endif /* !defined(PIOS_EXCLUDE_ADVANCED_FEATURES) */
-            0; // this is an invalid mode
-    }
-
-    stabilization.StabilizationMode.Thrust = stab_settings[3];
-    stabilization.Thrust = cmd.Thrust;
-    StabilizationDesiredSet(&stabilization);
+	// stablelize des roll angle
+	// handle flight mode,stablelized2 is poshold --- dxx 20210617-11.01
+	switch (flightStatus.FlightMode) {
+		case FLIGHTSTATUS_FLIGHTMODE_STABILIZED2:
+			handlePosHold(cmd);
+			return;
+		default:
+    		stabilization.Roll = (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Roll * stabSettings.RollMax :
+    					0;
+			stabilization.Pitch = (stab_settings[1] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Pitch * stabSettings.PitchMax :
+						0;
+			// TOOD: Add assumption about order of stabilization desired and manual control stabilization mode fields having same order
+    		stabilization.StabilizationMode.Roll  = stab_settings[0];
+    		stabilization.StabilizationMode.Pitch = stab_settings[1];
+			stabilization.Yaw = (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Yaw * stabSettings.YawMax :
+								(stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATE) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
+								0;
+			stabilization.StabilizationMode.Thrust = stab_settings[3];
+    		stabilization.Thrust = cmd.Thrust;
+    		StabilizationDesiredSet(&stabilization);
+			break;
+		}
 }
 
+// positionhold mannual handler, set Positiondesired;
+// cmd 
+static void handlePosHold(ManualControlCommandData cmd)
+{
+	OptiSetpointData OptiSetpoint;
+	OptiSetpointSettingsData OptiSetpointSettings;
+	OptiPositionStateData OptiPositionState;
+	OptiVelocityStateData OptiVelocityState;
+	OptiSetpointSettingsGet(&OptiSetpointSettings);
 
+	OptiPositionStateGet(&OptiPositionState);
+	OptiVelocityStateGet(&OptiVelocityState);
+	OptiSetpointGet(&OptiSetpoint);
+
+	//////////////////////////z control///////////////////////////////////
+	float climb = ((cmd.Thrust - .5f) / .5f); //中立位置为0.5
+	if(climb > 0.f) 
+		climb *= maxPosVelLimit.MaxVelocityUp;
+	else
+		climb *= maxPosVelLimit.MaxVelocityDown;
+
+	
+	if (fabsf(climb) > 5.f)
+	{
+		isAdjustingPosZ = true;												
+		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
+		OptiSetpoint.Velocity.Down = -climb; //down is positive
+	}
+	else if (isAdjustingPosZ == true)
+	{
+		isAdjustingPosZ = false;
+		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+		OptiSetpoint.Position.Down = OptiPositionState.Down + errorPosZ;	/*调整新位置*/									
+	}
+	else if(isAdjustingPosZ == false)	/*Z位移误差*/
+	{
+	// TODO: test if maxPosVelLimit.MaxPositionDown is available--dxx
+		errorPosZ = OptiSetpoint.Position.Down - OptiPositionState.Down;
+		errorPosZ = boundf(errorPosZ, -maxPosVelLimit.MaxPositionDown, maxPosVelLimit.MaxPositionDown);	/*误差限幅 单位m*/
+	}	
+
+	///////////////////////////////////////////xy control///////////////////////
+	//int send_vel = OptiSetpointSettings.OptiSpeedMax.North*10;
+	//DEBUG_PRINTF(2,"POSE VEL %d\n",(int)(maxPosVelLimit.MaxVelocityNorth*10));
+	//DEBUG_PRINTF(2,"POSE VEL2 %d\n",send_vel);
+	if(fabsf(cmd.Roll)>STICK_POSHOLD_THRES&&fabsf(cmd.Roll)>STICK_POSHOLD_THRES)
+	{
+		adjustPosXYTime = 0;
+		isAdjustingPosXY = true;
+		
+		OptiSetpoint.OptiSetpointMode.North = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
+		OptiSetpoint.OptiSetpointMode.East = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
+		OptiSetpoint.Velocity.North = cmd.Roll * maxPosVelLimit.MaxVelocityNorth;
+		OptiSetpoint.Velocity.East = cmd.Pitch * maxPosVelLimit.MaxVelocityEast;
+
+	}
+	else if(isAdjustingPosXY == true)
+	{
+		if(adjustPosXYTime++ > 100)
+		{
+			adjustPosXYTime = 0;
+			isAdjustingPosXY = false;
+		}		
+		OptiSetpoint.OptiSetpointMode.North = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+		OptiSetpoint.OptiSetpointMode.East = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+		OptiSetpoint.Position.North = OptiPositionState.North + errorPosX;	//调整新位置
+		OptiSetpoint.Position.East = OptiPositionState.East + errorPosY;	//调整新位置
+	}
+	else 
+	{
+		errorPosX = OptiSetpoint.Position.North - OptiPositionState.North;
+		errorPosY = OptiSetpoint.Position.East - OptiPositionState.East;
+		errorPosX = boundf(errorPosX, -maxPosVelLimit.MaxPositionNorth, maxPosVelLimit.MaxPositionNorth);	/*误差限幅 单位m*/
+		errorPosY = boundf(errorPosY, -maxPosVelLimit.MaxPositionEast, maxPosVelLimit.MaxPositionEast);	/*误差限幅 单位m*/
+	}
+	OptiSetpointSet(&OptiSetpoint);
+}
 /**
  * @}
  * @}

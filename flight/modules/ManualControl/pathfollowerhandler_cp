@@ -52,7 +52,7 @@ void pathFollowerHandler(bool newinit)
     if (newinit) {
         plan_initialize();
     }
-	DEBUG_PRINTF(2,"PTH");
+
     FlightStatusFlightModeOptions flightMode;
     FlightStatusAssistedControlStateOptions assistedControlFlightMode;
     FlightStatusFlightModeAssistOptions flightModeAssist;
@@ -158,4 +158,3 @@ void pathFollowerHandler(__attribute__((unused)) bool newinit)
  * @}
  * @}
  */
-

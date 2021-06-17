@@ -120,6 +120,9 @@ UAVOBJS = \
     $${UAVOBJ_XML_DIR}/poilocation.xml \
     $${UAVOBJ_XML_DIR}/positionstate.xml \
     $${UAVOBJ_XML_DIR}/optipositionstate.xml\
+    $${UAVOBJ_XML_DIR}/optivelocitystate.xml\
+    $${UAVOBJ_XML_DIR}/optisetpoint.xml\
+    $${UAVOBJ_XML_DIR}/optisetpointsettings.xml\
     $${UAVOBJ_XML_DIR}/radiocombridgestats.xml \
     $${UAVOBJ_XML_DIR}/ratedesired.xml \
     $${UAVOBJ_XML_DIR}/receiveractivity.xml \

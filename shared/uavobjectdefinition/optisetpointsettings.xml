@@ -1,0 +1,16 @@
+<xml>
+    <object name="OptiSetpointSettings" singleinstance="true" settings="true" category="Control">
+        <description>OptiSetPoint settings used to set max velocity and position</description>
+        <field name="OptiSpeedMax" units="m/s" type="float" elementnames="North,East,Down" defaultvalue="1.0,1.0,0.6"/>
+                <!-- Vne, i.e. maximum airspeed the airframe can handle - used by autopilot, actuator compensation. as well as possibly by INS for plausibility checks -->
+        <field name="OptiPositionMax" units="m" type="float" elementnames="North,East,Down" defaultvalue="0.3,0.3,0.1"/>
+                <!-- Vs0, i.e stall speed - minimum speed the airframe will be able to fly - used by autopilot, actuator compensation, as well as possibly by INS for plausibility check
+		     TODO: currently not used by vtols, needs its default changed to 0 as soon as its used by vtols-->
+
+        <access gcs="readwrite" flight="readwrite"/>
+        <telemetrygcs acked="true" updatemode="onchange" period="0"/>
+        <telemetryflight acked="true" updatemode="onchange" period="0"/>
+        <logging updatemode="manual" period="0"/>
+    </object>
+</xml>
+
