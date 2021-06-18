@@ -175,7 +175,7 @@ void stabilizedHandler(__attribute__((unused)) bool newinit)
 	switch (flightStatus.FlightMode) {
 		case FLIGHTSTATUS_FLIGHTMODE_STABILIZED2:
 			handlePosHold(cmd);
-			return;
+			//return;
 		default:
     		stabilization.Roll = (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Roll * stabSettings.RollMax :
     					0;
@@ -187,6 +187,7 @@ void stabilizedHandler(__attribute__((unused)) bool newinit)
 			stabilization.Yaw = (stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Yaw * stabSettings.YawMax :
 								(stab_settings[2] == STABILIZATIONDESIRED_STABILIZATIONMODE_RATE) ? cmd.Yaw * stabSettings.ManualRate.Yaw :
 								0;
+			stabilization.StabilizationMode.Yaw = stab_settings[2];
 			stabilization.StabilizationMode.Thrust = stab_settings[3];
     		stabilization.Thrust = cmd.Thrust;
     		StabilizationDesiredSet(&stabilization);

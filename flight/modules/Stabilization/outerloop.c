@@ -147,7 +147,7 @@ static void stabilizationOuterloopTask()
     float local_error[3];
     {
 #if defined(PIOS_QUATERNION_STABILIZATION)
-        // Quaternion calculation of error in each axis.  Uses more memory.
+        // Quaternion calculatifaon of error in each axis.  Uses more memory.
         float rpy_desired[3];
         float q_desired[4];
         float q_error[4];

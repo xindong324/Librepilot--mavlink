@@ -128,7 +128,20 @@ typedef struct __attribute__ ((__packed__)) {
 }  PathDesiredStartData ;
 
 ```
+## 飞行模式
+uavobject中Flightmodesettings.xml关于Stabilization1Settings定义了每个通道不包含的姿态模式,以limits=“%NE”
+```
+<field name="Stabilization1Settings" units="" type="enum"
+        elementnames="Roll,Pitch,Yaw,Thrust"
+        options="Manual,Rate,RateTrainer,Attitude,AxisLock,WeakLeveling,VirtualBar,Acro+,Rattitude,AltitudeHold,AltitudeVario,CruiseControl,SystemIdent"
+        defaultvalue="Attitude,Attitude,AxisLock,Manual"
+        limits="%NE:AltitudeHold:AltitudeVario:CruiseControl:SystemIdent; \
+            %NE:AltitudeHold:AltitudeVario:CruiseControl:SystemIdent; \
+            %NE:RateTrainer:AltitudeHold:AltitudeVario:CruiseControl:Attitude:Rattitude:WeakLeveling:VirtualBar:SystemIdent; \
+            %NE:Rate:RateTrainer:Attitude:AxisLock:WeakLeveling:VirtualBar:Acro+:Rattitude:SystemIdent;"
+            />
 
+```
 
 #只编译飞控固件的纯净版
 1. librepilot/flight/targets/Boards中其他飞控文件夹删除
