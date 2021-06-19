@@ -49,6 +49,7 @@
 #include "homelocation.h"
 #include "positionstate.h"
 #include "optipositionstate.h"
+#include "optivelocitystate.h"
 #include "velocitystate.h"
 #include "taskinfo.h"
 #include "mavlink.h"
@@ -688,6 +689,7 @@ static void handleMessage(mavlink_message_t *msg)
         }
 		case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE: {
 			OptiPositionStateData optipositionState;
+			OptiVelocityStateData optivelocityState;
 			mavlink_vicon_position_estimate_t vicon_pose;
 			DEBUG_PRINTF(2,"px: %d",(int)(100*vicon_pose.x));
 			
@@ -695,7 +697,11 @@ static void handleMessage(mavlink_message_t *msg)
 			optipositionState.North = vicon_pose.x;
 			optipositionState.East  = vicon_pose.y;
 			optipositionState.Down  = vicon_pose.z;
+			optivelocityState.North = vicon_pose.roll;
+			optivelocityState.East = vicon_pose.pitch;
+			optivelocityState.Down = vicon_pose.yaw;
 			OptiPositionStateSet(&optipositionState);
+			OptiVelocityStateSet(&optivelocityState);
 			break;
 		}
         
