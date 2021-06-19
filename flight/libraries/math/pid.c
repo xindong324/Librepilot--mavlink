@@ -39,6 +39,9 @@ static float deriv_tau   = 7.9577e-3f;
 // ! Store the setpoint weight to apply for the derivative term
 static float deriv_gamma = 1.0f;
 
+#define DEFAULT_PID_INTEGRATION_LIMIT 		(0.0f) //默认pid的积分限幅
+#define DEFAULT_PID_OUTPUT_LIMIT      		0.0	  //默认pid输出限幅，0为不限幅
+
 /**
  * Update the PID computation
  * @param[in] pid The PID struture which stores temporary information
@@ -139,13 +142,33 @@ void pid_configure_derivative(float cutoff, float g)
  * @param[in] p The proportional term
  * @param[in] i The integral term
  * @param[in] d The derivative term
+ * @param[in] iLim the limit of intger,for iLim<0,settoDefault limit
  */
 void pid_configure(struct pid *pid, float p, float i, float d, float iLim)
 {
     if (!pid) {
         return;
     }
+    pid->p    = p;
+    pid->i    = i;
+    pid->d    = d;
+    pid->iLim = iLim;
+}
 
+/**
+ * Configure the settings for a pid structure
+ * @param[out] pid The PID structure to configure
+ * @param[in] p The proportional term
+ * @param[in] i The integral term
+ * @param[in] d The derivative term
+ * @param[in] iLim the limit of intger,for iLim<0,settoDefault limit
+ */
+void pid_configure_new(struct pid *pid, float p, float i, float d, float iLim)
+{
+    if (!pid) {
+        return;
+    }
+	if(iLim<0) iLim = DEFAULT_PID_INTEGRATION_LIMIT;
     pid->p    = p;
     pid->i    = i;
     pid->d    = d;

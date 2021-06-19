@@ -5,7 +5,7 @@
         <field name="Velocity" units="m/s" type="float" elementnames="North,East,Down" defaultvalue="0.0, 0.0,0.0"/>
 		<field name="Trust" units="" type="float" elements="1"/>
 	<!-- These values should match those in FlightModeSettings.Stabilization{1,2,3}Settings -->
-        <field name="OptiSetpointMode" units="" type="enum" elementnames="North,East,Down" options="Manual,Attitude,Velocity,Position,Takeoff,Land" defaultvalue="Attitude, Attitude,Attitude"/>
+        <field name="OptiSetpointMode" units="" type="enum" elementnames="North,East,Down" options="Disable,Manual,Attitude,Velocity,Position,Takeoff,Land" defaultvalue="Attitude, Attitude,Attitude"/>
         <access gcs="readwrite" flight="readwrite"/>
         <telemetrygcs acked="false" updatemode="manual" period="0"/>
         <telemetryflight acked="false" updatemode="periodic" period="1000"/>

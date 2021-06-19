@@ -49,6 +49,12 @@
 #include <altitudeloop.h>
 #include <CoordinateConversions.h>
 
+#include <optipositionstate.h>
+#include <optivelocitystate.h>
+#include <optisetpoint.h>
+#include <optisetpointsettings.h>
+
+
 // Private constants
 
 #define CALLBACK_PRIORITY CALLBACK_PRIORITY_REGULAR
@@ -73,6 +79,8 @@ static bool rollMax  = false;
 static void stabilizationOuterloopTask();
 static void AttitudeStateUpdatedCb(__attribute__((unused)) UAVObjEvent *ev);
 
+static void PositionHoldXY(float dT);
+
 void stabilizationOuterloopInit()
 {
     RateDesiredInitialize();
@@ -81,6 +89,13 @@ void stabilizationOuterloopInit()
     StabilizationStatusInitialize();
     FlightStatusInitialize();
     ManualControlCommandInitialize();
+
+	OptiVelocityStateInitialize();
+	OptiPositionStateInitialize();
+	OptiSetpointInitialize();
+	OptiSetpointSettingsInitialize();
+
+	//OptiSetpointConnectCallback(&SettingsUpdatedCb);
 
     PIOS_DELTATIME_Init(&timeval, UPDATE_EXPECTED, UPDATE_MIN, UPDATE_MAX, UPDATE_ALPHA);
 
@@ -96,22 +111,37 @@ void stabilizationOuterloopInit()
  */
 static void stabilizationOuterloopTask()
 {
+	
     AttitudeStateData attitudeState;
     RateDesiredData rateDesired;
     StabilizationDesiredData stabilizationDesired;
     StabilizationStatusOuterLoopData enabled;
+	FlightStatusData flightStatus;
+
 
     AttitudeStateGet(&attitudeState);
-    StabilizationDesiredGet(&stabilizationDesired);
+    
     RateDesiredGet(&rateDesired);
     StabilizationStatusOuterLoopGet(&enabled);
+	FlightStatusGet(&flightStatus);
     float *stabilizationDesiredAxis = &stabilizationDesired.Roll;
     float *rateDesiredAxis = &rateDesired.Roll;
     int t;
     float dT    = PIOS_DELTATIME_GetAverageSeconds(&timeval);
     StabilizationStatusOuterLoopOptions newThrustMode = StabilizationStatusOuterLoopToArray(enabled)[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
     bool reinit = (newThrustMode != previous_mode[STABILIZATIONSTATUS_OUTERLOOP_THRUST]);
+	uint8_t new_mode = flightStatus.FlightMode;
 
+	// TODO: adjust position
+	if(new_mode == FLIGHTSTATUS_FLIGHTMODE_STABILIZED2)
+	{
+		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationAltitudeHold(stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST], ALTITUDEHOLD, reinit);
+		PositionHoldXY(dT);
+	}
+
+	StabilizationDesiredGet(&stabilizationDesired);
+
+/*
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
     // Trigger a disable message to the alt hold on reinit to prevent that loop from running when not in use.
     if (reinit) {
@@ -143,7 +173,9 @@ static void stabilizationOuterloopTask()
         rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
         break;
     }
-
+*/
+	
+	
     float local_error[3];
     {
 #if defined(PIOS_QUATERNION_STABILIZATION)
@@ -361,7 +393,47 @@ static void stabilizationOuterloopTask()
     stabSettings.monitor.rateupdates = 0;
 }
 
+static void VelocityControl(float desired_veln,float desired_vele,float dT)
+{
+	OptiVelocityStateData optiVelocityState;
+	OptiVelocityStateGet(&optiVelocityState);
 
+	float vel_errn = desired_veln - optiVelocityState.North;
+	float vel_erre = desired_vele - optiVelocityState.East;
+	
+	float desired_roll = pid_apply(&stabSettings.velocityPids[0],vel_errn,dT);
+	float desired_pitch = pid_apply(&stabSettings.velocityPids[1],vel_erre,dT);
+	StabilizationDesiredRollSet(&desired_roll);
+	StabilizationDesiredPitchSet(&desired_pitch);
+}
+static void PositionHoldXY(float dT)
+{
+	OptiPositionStateData optiPositionState;
+	OptiSetpointData optiSetpoint;
+	
+
+	float desired_veln = 0.f;
+	float desired_vele = 0.f;
+	
+	OptiPositionStateGet(&optiPositionState);
+	OptiSetpointGet(&optiSetpoint);
+	
+
+	desired_veln = optiSetpoint.Velocity.North;
+	desired_vele = optiSetpoint.Velocity.East;
+	
+	if(optiSetpoint.OptiSetpointMode.North == OPTISETPOINT_OPTISETPOINTMODE_POSITION
+		&&optiSetpoint.OptiSetpointMode.East == OPTISETPOINT_OPTISETPOINTMODE_POSITION)
+	{
+		float errn = optiSetpoint.Position.North - optiPositionState.North;
+		float erre = optiSetpoint.Position.East - optiPositionState.East;
+		desired_veln = pid_apply(&stabSettings.positionPids[0],errn,dT);
+		desired_vele = pid_apply(&stabSettings.positionPids[1],erre,dT);
+	}
+	VelocityControl(desired_veln,desired_vele,dT);
+	
+	
+}
 static void AttitudeStateUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
 #ifndef STABILIZATION_ATTITUDE_DOWNSAMPLED

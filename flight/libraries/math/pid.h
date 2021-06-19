@@ -73,6 +73,8 @@ float pid_apply(struct pid *pid, const float err, float dT);
 float pid_apply_setpoint(struct pid *pid, const pid_scaler *scaler, const float setpoint, const float measured, float dT, bool meas_based_d_term);
 void pid_zero(struct pid *pid);
 void pid_configure(struct pid *pid, float p, float i, float d, float iLim);
+void pid_configure_new(struct pid *pid, float p, float i, float d, float iLim);
+
 void pid_configure_derivative(float cutoff, float gamma);
 
 // Methods for use with pid2 structure

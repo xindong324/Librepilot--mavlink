@@ -37,6 +37,7 @@
 #include <pid.h>
 #include <stabilizationsettings.h>
 #include <stabilizationbank.h>
+#include <vtolpathfollowersettings.h>
 
 
 int32_t StabilizationInitialize();
@@ -44,6 +45,7 @@ int32_t StabilizationInitialize();
 typedef struct {
     StabilizationSettingsData settings;
     StabilizationBankData     stabBank;
+	VtolPathFollowerSettingsData posvelBank;
     float gyro_alpha;
     float floatThrustPIDScaleCurve[STABILIZATIONBANK_THRUSTPIDSCALECURVE_NUMELEM];
     float acroInsanityFactors[STABILIZATIONBANK_ACROINSANITYFACTOR_NUMELEM];
@@ -60,7 +62,7 @@ typedef struct {
         int8_t rateupdates;
     }     monitor;
     float rattitude_mode_transition_stick_position;
-    struct pid innerPids[3], outerPids[3];
+    struct pid innerPids[3], outerPids[3],positionPids[3],velocityPids[3];
     // TPS [Roll,Pitch,Yaw][P,I,D]
     bool  thrust_pid_scaling_enabled[3][3];
 } StabilizationData;

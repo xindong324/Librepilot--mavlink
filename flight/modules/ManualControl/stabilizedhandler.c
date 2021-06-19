@@ -55,6 +55,8 @@ static uint8_t currentFpvTiltAngle = 0;
 static float cosAngle = 0.0f;
 static float sinAngle = 0.0f;
 
+static bool initFlight = false; // alt/pos mode flight init
+
 // position handler variable;
 static int adjustPosXYTime = 0;
 static bool isAdjustingPosXY = true;
@@ -211,35 +213,62 @@ static void handlePosHold(ManualControlCommandData cmd)
 
 	//////////////////////////z control///////////////////////////////////
 	float climb = ((cmd.Thrust - .5f) / .5f); //中立位置为0.5
+	float check_deadband = climb;
+	const float DEADBAND      = 0.20f;
+    const float DEADBAND_HIGH = 1.0f / 2 + DEADBAND / 2;
+    const float DEADBAND_LOW  = 1.0f / 2 - DEADBAND / 2;
+
 	if(climb > 0.f) 
+	{
 		climb *= maxPosVelLimit.MaxVelocityUp;
+		if(!initFlight)
+		{
+			initFlight = true;
+			isAdjustingPosXY = true;
+			errorPosX = 0.f;
+			errorPosY = 0.f;
+			errorPosZ = 0.f;
+			DEBUG_PRINTF(2,"POS HOLD ENABLE\n");
+		}
+	}
 	else
 		climb *= maxPosVelLimit.MaxVelocityDown;
-
-	
-	if (fabsf(climb) > 5.f)
+	if(initFlight)
 	{
-		isAdjustingPosZ = true;												
-		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
-		OptiSetpoint.Velocity.Down = -climb; //down is positive
+		if (check_deadband<DEADBAND_LOW||check_deadband>DEADBAND_HIGH)
+		{
+			isAdjustingPosZ = true;												
+			OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
+			OptiSetpoint.Velocity.Down = -climb; //down is positive
+		}
+		else if (isAdjustingPosZ == true)
+		{
+			isAdjustingPosZ = false;
+			OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+			OptiSetpoint.Position.Down = OptiPositionState.Down + errorPosZ;	/*调整新位置*/									
+		}
+		else if(isAdjustingPosZ == false)	/*Z位移误差*/
+		{
+		// TODO: test if maxPosVelLimit.MaxPositionDown is available--dxx
+			errorPosZ = OptiSetpoint.Position.Down - OptiPositionState.Down;
+			errorPosZ = boundf(errorPosZ, -maxPosVelLimit.MaxPositionDown, maxPosVelLimit.MaxPositionDown);	/*误差限幅 单位m*/
+		}
 	}
-	else if (isAdjustingPosZ == true)
+	else/*着陆状态*/
 	{
+		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_DISABLE;
+		OptiSetpoint.Trust = 0.f;
+		OptiSetpoint.Velocity.Down = 0.f;
+		OptiSetpoint.Position.Down = 0.f;
+		initFlight = false;
 		isAdjustingPosZ = false;
-		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
-		OptiSetpoint.Position.Down = OptiPositionState.Down + errorPosZ;	/*调整新位置*/									
 	}
-	else if(isAdjustingPosZ == false)	/*Z位移误差*/
-	{
-	// TODO: test if maxPosVelLimit.MaxPositionDown is available--dxx
-		errorPosZ = OptiSetpoint.Position.Down - OptiPositionState.Down;
-		errorPosZ = boundf(errorPosZ, -maxPosVelLimit.MaxPositionDown, maxPosVelLimit.MaxPositionDown);	/*误差限幅 单位m*/
-	}	
 
 	///////////////////////////////////////////xy control///////////////////////
 	//int send_vel = OptiSetpointSettings.OptiSpeedMax.North*10;
 	//DEBUG_PRINTF(2,"POSE VEL %d\n",(int)(maxPosVelLimit.MaxVelocityNorth*10));
 	//DEBUG_PRINTF(2,"POSE VEL2 %d\n",send_vel);
+	// TODO: add if optidata vailable;
 	if(fabsf(cmd.Roll)>STICK_POSHOLD_THRES&&fabsf(cmd.Roll)>STICK_POSHOLD_THRES)
 	{
 		adjustPosXYTime = 0;

@@ -51,6 +51,9 @@
 #include <outerloop.h>
 #include <altitudeloop.h>
 
+#include <vtolpathfollowersettings.h>
+
+
 
 // Public variables
 StabilizationData stabSettings;
@@ -64,6 +67,8 @@ static void BankUpdatedCb(UAVObjEvent *ev);
 static void SettingsBankUpdatedCb(UAVObjEvent *ev);
 static void FlightModeSwitchUpdatedCb(UAVObjEvent *ev);
 static void StabilizationDesiredUpdatedCb(UAVObjEvent *ev);
+static void PosVelBankUpdatedCb(UAVObjEvent *ev);
+
 
 /**
  * Module initialization
@@ -81,6 +86,7 @@ int32_t StabilizationStart()
     StabilizationDesiredUpdatedCb(StabilizationDesiredHandle());
     FlightModeSwitchUpdatedCb(ManualControlCommandHandle());
     BankUpdatedCb(StabilizationBankHandle());
+	PosVelBankUpdatedCb(VtolPathFollowerSettingsHandle());
 
 #ifdef PIOS_INCLUDE_WDG
     PIOS_WDG_RegisterFlag(PIOS_WDG_STABILIZATION);
@@ -105,6 +111,8 @@ int32_t StabilizationInitialize()
     ManualControlCommandInitialize(); // only used for PID bank selection based on flight mode switch
     sin_lookup_initalize();
 
+	VtolPathFollowerSettingsInitialize();
+
     stabilizationOuterloopInit();
     stabilizationInnerloopInit();
 #ifdef REVOLUTION
@@ -116,6 +124,13 @@ int32_t StabilizationInitialize()
     pid_zero(&stabSettings.innerPids[0]);
     pid_zero(&stabSettings.innerPids[1]);
     pid_zero(&stabSettings.innerPids[2]);
+
+	pid_zero(&stabSettings.positionPids[0]);
+    pid_zero(&stabSettings.positionPids[1]);
+    pid_zero(&stabSettings.positionPids[2]);
+    pid_zero(&stabSettings.velocityPids[0]);
+    pid_zero(&stabSettings.velocityPids[1]);
+    pid_zero(&stabSettings.velocityPids[2]);
     return 0;
 }
 
@@ -303,9 +318,55 @@ static bool use_tps_for_d()
            target == STABILIZATIONBANK_THRUSTPIDSCALETARGET_D;
 }
 
+static void PosVelBankUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
+{
+	// TODO: check if update good
+	VtolPathFollowerSettingsGet(&stabSettings.posvelBank);
+	// Set the North vel PID constants
+    pid_configure_new(&stabSettings.velocityPids[0], stabSettings.posvelBank.HorizontalVelPID.Kp,
+                  stabSettings.posvelBank.HorizontalVelPID.Ki,
+                  stabSettings.posvelBank.HorizontalVelPID.Kd,
+                  -1);
+
+    // Set the Eastvel PID constants
+    pid_configure_new(&stabSettings.velocityPids[1], stabSettings.posvelBank.HorizontalVelPID.Kp,
+                  stabSettings.posvelBank.HorizontalVelPID.Ki,
+                  stabSettings.posvelBank.HorizontalVelPID.Kd,
+                  -1);
+
+    // Set the DownVel  PID constants
+    pid_configure_new(&stabSettings.velocityPids[2], stabSettings.posvelBank.VerticalVelPID.Kp,
+                  stabSettings.posvelBank.HorizontalVelPID.Ki,
+                  stabSettings.posvelBank.HorizontalVelPID.Kd,
+                  -1);
+    // Set the roll attitude PI constants
+    pid_configure_new(&stabSettings.positionPids[0], stabSettings.posvelBank.HorizontalPosP,
+                  0,
+                  0,
+                  -1);
+
+    // Set the pitch attitude PI constants
+    
+	pid_configure_new(&stabSettings.positionPids[1], stabSettings.posvelBank.HorizontalPosP,
+					  0,
+					  0,
+					  -1);
+    
+    // Set the yaw attitude PI constants
+    
+	pid_configure_new(&stabSettings.positionPids[2], stabSettings.posvelBank.VerticalPosP,
+					  0,
+					  0,
+					  -1);
+    
+}
+
+
 static void BankUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
     StabilizationBankGet(&stabSettings.stabBank);
+
+	
 
     // Set the roll rate PID constants
     pid_configure(&stabSettings.innerPids[0], stabSettings.stabBank.RollRatePID.Kp,
