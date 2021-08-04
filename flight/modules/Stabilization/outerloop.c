@@ -120,7 +120,7 @@ static void stabilizationOuterloopTask()
 
 
     AttitudeStateGet(&attitudeState);
-    
+    StabilizationDesiredGet(&stabilizationDesired);
     RateDesiredGet(&rateDesired);
     StabilizationStatusOuterLoopGet(&enabled);
 	FlightStatusGet(&flightStatus);
@@ -132,14 +132,21 @@ static void stabilizationOuterloopTask()
     bool reinit = (newThrustMode != previous_mode[STABILIZATIONSTATUS_OUTERLOOP_THRUST]);
 	uint8_t new_mode = flightStatus.FlightMode;
 
+	
+
 	// TODO: adjust position
 	if(new_mode == FLIGHTSTATUS_FLIGHTMODE_STABILIZED2)
 	{
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationAltitudeHold(stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST], ALTITUDEHOLD, reinit);
 		PositionHoldXY(dT);
+	}else
+	{
+		stabilizationDisableAltitudeHold();
+		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
+		
 	}
 
-	StabilizationDesiredGet(&stabilizationDesired);
+	
 
 /*
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
