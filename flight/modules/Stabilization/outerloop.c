@@ -78,8 +78,11 @@ static bool rollMax  = false;
 // Private functions
 static void stabilizationOuterloopTask();
 static void AttitudeStateUpdatedCb(__attribute__((unused)) UAVObjEvent *ev);
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 
 static void PositionHoldXY(float dT);
+
+#endif
 
 void stabilizationOuterloopInit()
 {
@@ -130,23 +133,25 @@ static void stabilizationOuterloopTask()
     float dT    = PIOS_DELTATIME_GetAverageSeconds(&timeval);
     StabilizationStatusOuterLoopOptions newThrustMode = StabilizationStatusOuterLoopToArray(enabled)[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
     bool reinit = (newThrustMode != previous_mode[STABILIZATIONSTATUS_OUTERLOOP_THRUST]);
-	uint8_t new_mode = flightStatus.FlightMode;
-
 	
 
+	
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
+	uint8_t new_mode = flightStatus.FlightMode;
 	// TODO: adjust position
 	if(new_mode == FLIGHTSTATUS_FLIGHTMODE_STABILIZED2)
 	{
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationAltitudeHold(stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST], ALTITUDEHOLD, reinit);
 		PositionHoldXY(dT);
 	}else
+#endif	
 	{
 		stabilizationDisableAltitudeHold();
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
 		
 	}
 
-	
+
 
 /*
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
@@ -399,6 +404,7 @@ static void stabilizationOuterloopTask()
     cruisecontrol_compute_factor(&attitudeState, rateDesired.Thrust);
     stabSettings.monitor.rateupdates = 0;
 }
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 
 static void VelocityControl(float desired_veln,float desired_vele,float dT)
 {
@@ -413,6 +419,7 @@ static void VelocityControl(float desired_veln,float desired_vele,float dT)
 	StabilizationDesiredRollSet(&desired_roll);
 	StabilizationDesiredPitchSet(&desired_pitch);
 }
+
 static void PositionHoldXY(float dT)
 {
 	OptiPositionStateData optiPositionState;
@@ -441,6 +448,9 @@ static void PositionHoldXY(float dT)
 	
 	
 }
+
+#endif
+
 static void AttitudeStateUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
 #ifndef STABILIZATION_ATTITUDE_DOWNSAMPLED

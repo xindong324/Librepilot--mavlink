@@ -97,13 +97,17 @@ float stabilizationAltitudeHold(float setpoint, ThrustModeType mode, bool reinit
         thrustMode  = mode;
         altitudeHoldTask();
     }
+	if(setpoint<=0)
+	{
+	}
+	//altitudeHoldTask();
 
     //const float DEADBAND      = 0.20f;
     //const float DEADBAND_HIGH = 1.0f / 2 + DEADBAND / 2;
     //const float DEADBAND_LOW  = 1.0f / 2 - DEADBAND / 2;
 
 	
-	
+	/*
     if (altitudeHoldSettings.CutThrustWhenZero && setpoint <= 0) {
         // Cut thrust if desired
         controlDown.UpdateVelocitySetpoint(0.0f);
@@ -112,6 +116,7 @@ float stabilizationAltitudeHold(float setpoint, ThrustModeType mode, bool reinit
         newaltitude  = true;
         return thrustDemand;
     }
+    */
 	// thrust demand is provided by the func :: altitudetask 
     thrustDemand = boundf(thrustDemand, altitudeHoldSettings.ThrustLimits.Min, altitudeHoldSettings.ThrustLimits.Max);
 	if(newaltitude) newaltitude = true;
@@ -135,7 +140,7 @@ static void altitudeHoldTask(void)
     if (!controlDown.IsActive()) {
         return;
     }
-	//DEBUG_PRINTF(2,"in Altitude");
+	DEBUG_PRINTF(2,"in Altitude");
 
     AltitudeHoldStatusData altitudeHoldStatus;
     AltitudeHoldStatusGet(&altitudeHoldStatus);
@@ -168,7 +173,7 @@ static void altitudeHoldTask(void)
 		controlDown.UpdatePositionSetpoint(desiredPositionDown);
 		controlDown.ControlPosition();
 		desiredVelocityDown = controlDown.GetVelocityDesired();
-		altitudeHoldStatus.VelocityDesired = desiredPositionDown;
+		altitudeHoldStatus.VelocityDesired = desiredVelocityDown;
 	}
 	controlDown.UpdateVelocitySetpoint(desiredVelocityDown);
 	local_thrustDemand = controlDown.GetDownCommand();

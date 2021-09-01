@@ -65,6 +65,19 @@
 
 #define MAX_PORT_DELAY    800
 
+#define PIOS_MOCAP_RATE   20
+
+#define UPDATE_EXPECTED   (1.0f / PIOS_MOCAP_RATE)
+#define UPDATE_MIN        1.0e-6f
+#define UPDATE_MAX        0.5f
+#define UPDATE_ALPHA      0.5f
+
+#define LPF_ALTITUDE  	  0.1f
+
+//static PiOSDeltatimeConfig timeval;
+uint32_t time_last;
+float dT;
+
 
 // ****************
 // Private functions
@@ -179,6 +192,10 @@ static int32_t uavoMavlinkBridgeInitialize(void)
 	OptiPositionStateInitialize();
     if (PIOS_COM_MAVLINK) {
         updateSettings();
+
+		
+		//PIOS_DELTATIME_Init(&timeval, UPDATE_EXPECTED, UPDATE_MIN, UPDATE_MAX, UPDATE_ALPHA);
+		time_last = PIOS_DELAY_GetRaw();
 		
         mav_msg = pios_malloc(sizeof(*mav_msg));
         stream_ticks = pios_malloc(MAXSTREAMS);
@@ -638,7 +655,17 @@ static void uavoMavlinkBridgeTask(__attribute__((unused)) void *parameters)
 static void uavoMavlinkRxBridgeTask(__attribute__((unused)) void *parameters)
 {
 	while (1) {
+		//process mocap data time interval
+		dT = PIOS_DELAY_DiffuS(time_last) * 1.0e-6f;
+
+		if (dT>=UPDATE_MAX)
+		{ // set optidata unavailable
+			OptiPositionStateOptiDataVaildOptions optiValid = OPTIPOSITIONSTATE_OPTIDATAVAILD_FALSE;
+			OptiPositionStateOptiDataVaildSet(&optiValid);
+		}
+		
 		uint8_t buf[sizeof(*mav_rx_msg)];
+		
 		uint16_t bytes_to_process = PIOS_COM_ReceiveBuffer(PIOS_COM_MAVLINK, buf, sizeof(*mav_rx_msg), MAX_PORT_DELAY);
 		if(PIOS_COM_MAVLINK)
 		{
@@ -688,20 +715,49 @@ static void handleMessage(mavlink_message_t *msg)
             break;
         }
 		case MAVLINK_MSG_ID_VICON_POSITION_ESTIMATE: {
+
+			// vicon is enu, pos is ned
+			// enu to ned
+			//  x align
+			// North = x
+			// East = -y
+			// Down = -z
 			OptiPositionStateData optipositionState;
 			OptiVelocityStateData optivelocityState;
 			mavlink_vicon_position_estimate_t vicon_pose;
+			static mavlink_vicon_position_estimate_t vicon_pose_last;
+			OptiPositionStateGet(&optipositionState);
+
+			dT = PIOS_DELAY_DiffuS(time_last) * 1.0e-6f;
+			time_last = PIOS_DELAY_GetRaw();
+			
 			DEBUG_PRINTF(2,"px: %d",(int)(100*vicon_pose.x));
+
 			
 			mavlink_msg_vicon_position_estimate_decode(msg,&vicon_pose);
-			optipositionState.North = vicon_pose.x;
-			optipositionState.East  = vicon_pose.y;
-			optipositionState.Down  = vicon_pose.z;
-			optivelocityState.North = vicon_pose.roll;
-			optivelocityState.East = vicon_pose.pitch;
-			optivelocityState.Down = vicon_pose.yaw;
+
+			// zup to z down
+			vicon_pose.y = -vicon_pose.y;
+			vicon_pose.z = -vicon_pose.z;
+
+			if(optipositionState.OptiDataVaild == OPTIPOSITIONSTATE_OPTIDATAVAILD_TRUE)
+			{
+				optivelocityState.North = (1-LPF_ALTITUDE*LPF_ALTITUDE)*optivelocityState.North + LPF_ALTITUDE*LPF_ALTITUDE*(vicon_pose.x - vicon_pose_last.x)/dT;
+				optivelocityState.East = (1 - LPF_ALTITUDE*LPF_ALTITUDE)*optivelocityState.East + LPF_ALTITUDE*LPF_ALTITUDE*(vicon_pose.y - vicon_pose_last.y)/dT;
+				optivelocityState.Down = (1 - LPF_ALTITUDE*LPF_ALTITUDE)*optivelocityState.Down + LPF_ALTITUDE*LPF_ALTITUDE*(vicon_pose.z - vicon_pose_last.z)/dT;
+				OptiVelocityStateSet(&optivelocityState);
+			}
+
+			vicon_pose_last = vicon_pose;
+			
+			optipositionState.North = (1 - LPF_ALTITUDE)*optipositionState.North + LPF_ALTITUDE * vicon_pose.x;
+			optipositionState.East  = (1 - LPF_ALTITUDE)*optipositionState.East + LPF_ALTITUDE * vicon_pose.y;
+			optipositionState.Down  = (1 - LPF_ALTITUDE)*optipositionState.Down + LPF_ALTITUDE * vicon_pose.z;
+			
+			optipositionState.OptiDataVaild = OPTIPOSITIONSTATE_OPTIDATAVAILD_TRUE;
+			
 			OptiPositionStateSet(&optipositionState);
-			OptiVelocityStateSet(&optivelocityState);
+			
 			break;
 		}
         

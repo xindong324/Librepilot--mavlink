@@ -67,8 +67,11 @@ static void BankUpdatedCb(UAVObjEvent *ev);
 static void SettingsBankUpdatedCb(UAVObjEvent *ev);
 static void FlightModeSwitchUpdatedCb(UAVObjEvent *ev);
 static void StabilizationDesiredUpdatedCb(UAVObjEvent *ev);
-static void PosVelBankUpdatedCb(UAVObjEvent *ev);
 
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
+
+static void PosVelBankUpdatedCb(UAVObjEvent *ev);
+#endif
 
 /**
  * Module initialization
@@ -86,7 +89,9 @@ int32_t StabilizationStart()
     StabilizationDesiredUpdatedCb(StabilizationDesiredHandle());
     FlightModeSwitchUpdatedCb(ManualControlCommandHandle());
     BankUpdatedCb(StabilizationBankHandle());
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 	PosVelBankUpdatedCb(VtolPathFollowerSettingsHandle());
+#endif
 
 #ifdef PIOS_INCLUDE_WDG
     PIOS_WDG_RegisterFlag(PIOS_WDG_STABILIZATION);
@@ -110,9 +115,10 @@ int32_t StabilizationInitialize()
     RateDesiredInitialize();
     ManualControlCommandInitialize(); // only used for PID bank selection based on flight mode switch
     sin_lookup_initalize();
-
+	
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 	VtolPathFollowerSettingsInitialize();
-
+#endif
     stabilizationOuterloopInit();
     stabilizationInnerloopInit();
 #ifdef REVOLUTION
@@ -318,6 +324,8 @@ static bool use_tps_for_d()
            target == STABILIZATIONBANK_THRUSTPIDSCALETARGET_D;
 }
 
+#ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
+
 static void PosVelBankUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
 	// TODO: check if update good
@@ -360,7 +368,7 @@ static void PosVelBankUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 					  -1);
     
 }
-
+#endif
 
 static void BankUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {
