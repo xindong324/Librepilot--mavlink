@@ -215,8 +215,10 @@ static void handlePosHold(ManualControlCommandData cmd)
 	float climb = ((cmd.Thrust - .5f) / .5f); //中立位置为0.5
 	float check_deadband = climb;
 	const float DEADBAND      = 0.20f;
-    const float DEADBAND_HIGH = 1.0f / 2 + DEADBAND / 2;
-    const float DEADBAND_LOW  = 1.0f / 2 - DEADBAND / 2;
+    const float DEADBAND_HIGH = DEADBAND / 2.0f;
+    const float DEADBAND_LOW  =  -DEADBAND / 2.0f;
+
+	DEBUG_PRINTF(2,"Pos hold: High: %d,low: %d\n",(int)(DEADBAND_HIGH*10),(int)(DEADBAND_LOW*10));
 
 	if(climb > 0.f) 
 	{
@@ -271,13 +273,20 @@ static void handlePosHold(ManualControlCommandData cmd)
 	// TODO: add if optidata vailable;
 	if(fabsf(cmd.Roll)>STICK_POSHOLD_THRES&&fabsf(cmd.Roll)>STICK_POSHOLD_THRES)
 	{
+		float originalVy = cmd.Roll * maxPosVelLimit.MaxVelocityNorth;
+		float originalVx = cmd.Pitch * maxPosVelLimit.MaxVelocityEast;
+
+		float cosyaw = cosf(OptiPositionState.Yaw);
+		float sinyaw = sinf(OptiPositionState.Yaw);
+		
 		adjustPosXYTime = 0;
 		isAdjustingPosXY = true;
 		
 		OptiSetpoint.OptiSetpointMode.North = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
 		OptiSetpoint.OptiSetpointMode.East = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
-		OptiSetpoint.Velocity.North = cmd.Roll * maxPosVelLimit.MaxVelocityNorth;
-		OptiSetpoint.Velocity.East = cmd.Pitch * maxPosVelLimit.MaxVelocityEast;
+		// opti coord 2 yaw coord
+		OptiSetpoint.Velocity.North = originalVx * cosyaw + originalVy * sinyaw;
+		OptiSetpoint.Velocity.East = originalVy * cosyaw - originalVx * sinyaw;
 
 	}
 	else if(isAdjustingPosXY == true)

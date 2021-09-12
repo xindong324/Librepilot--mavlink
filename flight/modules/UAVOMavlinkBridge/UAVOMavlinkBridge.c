@@ -97,7 +97,7 @@ static void uavoMavlinkRxBridgeTask(void *parameters);
 #endif
 
 #define TASK_PRIORITY    (tskIDLE_PRIORITY)
-#define TASK_RATE_HZ     10
+#define TASK_RATE_HZ     1
 
 #define RX_TASK_PRIORITY (tskIDLE_PRIORITY+2)
 #define RX_TASK_RATE_HZ  	 40
@@ -118,23 +118,23 @@ static const struct {
     void    (*handler)();
 } mav_rates[] = {
     [MAV_DATA_STREAM_EXTENDED_STATUS] = {
-        .rate    = 2, // Hz
+        .rate    = 0, // Hz
         .handler = mavlink_send_extended_status,
     },
     [MAV_DATA_STREAM_RC_CHANNELS] =     {
-        .rate    = 5, // Hz
+        .rate    = 0, // Hz
         .handler = mavlink_send_rc_channels,
     },
     [MAV_DATA_STREAM_POSITION] =        {
-        .rate    = 2, // Hz
+        .rate    = 0, // Hz
         .handler = mavlink_send_position,
     },
     [MAV_DATA_STREAM_EXTRA1] =          {
-        .rate    = 1, // Hz
+        .rate    = 0, // Hz
         .handler = mavlink_send_extra1,
     },
     [MAV_DATA_STREAM_EXTRA2] =          {
-        .rate    = 2, // Hz
+        .rate    = 0, // Hz
         .handler = mavlink_send_extra2,
     },
 };
@@ -678,7 +678,7 @@ static void uavoMavlinkRxBridgeTask(__attribute__((unused)) void *parameters)
 					if (mavlink_parse_char(MAVLINK_COMM_0, buf[i], mav_rx_msg, &mav_rx_status))
 	     			{
 	        			//Serial.println(msg.msgid);
-	        			DEBUG_PRINTF(2,"msgid is: %d \n",mav_rx_msg->msgid);
+	        			//DEBUG_PRINTF(2,"msgid is: %d \n",mav_rx_msg->msgid);
 	        			handleMessage(mav_rx_msg);
 	        
 	     			}
@@ -704,7 +704,7 @@ static void ProcessBuf(uint8_t *buf)
 static void handleMessage(mavlink_message_t *msg)
 {
  //command for telemetry
- DEBUG_PRINTF(2,"id: %d",msg->seq);
+ //DEBUG_PRINTF(2,"id: %d",msg->seq);
     switch (msg->msgid) {
         
         case MAVLINK_MSG_ID_HEARTBEAT: {
@@ -731,7 +731,7 @@ static void handleMessage(mavlink_message_t *msg)
 			dT = PIOS_DELAY_DiffuS(time_last) * 1.0e-6f;
 			time_last = PIOS_DELAY_GetRaw();
 			
-			DEBUG_PRINTF(2,"px: %d",(int)(100*vicon_pose.x));
+			//DEBUG_PRINTF(2,"px: %d",(int)(100*vicon_pose.x));
 
 			
 			mavlink_msg_vicon_position_estimate_decode(msg,&vicon_pose);
@@ -753,6 +753,10 @@ static void handleMessage(mavlink_message_t *msg)
 			optipositionState.North = (1 - LPF_ALTITUDE)*optipositionState.North + LPF_ALTITUDE * vicon_pose.x;
 			optipositionState.East  = (1 - LPF_ALTITUDE)*optipositionState.East + LPF_ALTITUDE * vicon_pose.y;
 			optipositionState.Down  = (1 - LPF_ALTITUDE)*optipositionState.Down + LPF_ALTITUDE * vicon_pose.z;
+
+			optipositionState.Roll = -vicon_pose.roll;
+			optipositionState.Pitch = vicon_pose.pitch;
+			optipositionState.Yaw = -vicon_pose.yaw;
 			
 			optipositionState.OptiDataVaild = OPTIPOSITIONSTATE_OPTIDATAVAILD_TRUE;
 			

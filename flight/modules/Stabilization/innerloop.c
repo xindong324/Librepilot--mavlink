@@ -311,6 +311,8 @@ static void stabilizationInnerloopTask()
             // keep order as it is, RATE must follow!
             case STABILIZATIONSTATUS_INNERLOOP_RATE:
             {
+				//actuatorDesiredAxis[t] = rate[t];
+				
                 // limit rate to maximum configured limits (once here instead of 5 times in outer loop)
                 rate[t] = boundf(rate[t],
                                  -StabilizationBankMaximumRateToArray(stabSettings.stabBank.MaximumRate)[t],
@@ -318,6 +320,7 @@ static void stabilizationInnerloopTask()
                                  );
                 pid_scaler scaler = create_pid_scaler(t);
                 actuatorDesiredAxis[t] = pid_apply_setpoint(&stabSettings.innerPids[t], &scaler, rate[t], gyro_filtered[t], dT, measuredDterm_enabled);
+				
             }
             break;
             case STABILIZATIONSTATUS_INNERLOOP_ACRO:

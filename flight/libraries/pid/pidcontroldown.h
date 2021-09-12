@@ -62,7 +62,16 @@ public:
     void ControlPositionWithPath(struct path_status *progress);
     void UpdateBrakeVelocity(float startingVelocity, float dT, float brakeRate, float currentVelocity, float *updatedVelocity);
     void UpdateVelocityStateWithBrake(float pvDown, float path_time, float brakeRate);
-    void DisableNeutralThrustCalc()
+
+	// add new althold func
+	void UpdateVelParameters(float kp,float ki, float kd);
+	float GetDownCommand2(void);
+	void UpdateVelocityState2(float pv);
+	void ControlPosition2();
+	void UpdateMidTrustConfig(float trust);
+	///////////////end///////////////////////////
+
+	void DisableNeutralThrustCalc()
     {
         mAllowNeutralThrustCalc = false;
     }
@@ -85,10 +94,13 @@ private:
     float mNeutral;
     float mVelocityMax;
     struct pid PIDpos;
+	struct pid PIDvel;
     float mPositionSetpointTarget;
     float mPositionState;
     float mMinThrust;
     float mMaxThrust;
+	///  add var
+	float mMidTrust;
 
     struct NeutralThrustEstimation {
         uint32_t count;

@@ -344,8 +344,8 @@ static void PosVelBankUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 
     // Set the DownVel  PID constants
     pid_configure_new(&stabSettings.velocityPids[2], stabSettings.posvelBank.VerticalVelPID.Kp,
-                  stabSettings.posvelBank.HorizontalVelPID.Ki,
-                  stabSettings.posvelBank.HorizontalVelPID.Kd,
+                  stabSettings.posvelBank.VerticalVelPID.Ki,
+                  stabSettings.posvelBank.VerticalVelPID.Kd,
                   -1);
     // Set the roll attitude PI constants
     pid_configure_new(&stabSettings.positionPids[0], stabSettings.posvelBank.HorizontalPosP,

@@ -144,12 +144,15 @@ static void stabilizationOuterloopTask()
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationAltitudeHold(stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST], ALTITUDEHOLD, reinit);
 		PositionHoldXY(dT);
 	}else
-#endif	
 	{
 		stabilizationDisableAltitudeHold();
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
 		
 	}
+	#else
+		
+		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
+	#endif	
 
 
 
@@ -424,28 +427,39 @@ static void PositionHoldXY(float dT)
 {
 	OptiPositionStateData optiPositionState;
 	OptiSetpointData optiSetpoint;
-	
 
 	float desired_veln = 0.f;
 	float desired_vele = 0.f;
 	
 	OptiPositionStateGet(&optiPositionState);
 	OptiSetpointGet(&optiSetpoint);
-	
 
+	float cosyaw = cosf(optiPositionState.Yaw);
+	float sinyaw = sinf(optiPositionState.Yaw);
+	
 	desired_veln = optiSetpoint.Velocity.North;
 	desired_vele = optiSetpoint.Velocity.East;
+
+	
+	if(optiPositionState.OptiDataVaild == OPTIPOSITIONSTATE_OPTIDATAVAILD_FALSE)
+	{
+		return;
+	}
 	
 	if(optiSetpoint.OptiSetpointMode.North == OPTISETPOINT_OPTISETPOINTMODE_POSITION
 		&&optiSetpoint.OptiSetpointMode.East == OPTISETPOINT_OPTISETPOINTMODE_POSITION)
 	{
 		float errn = optiSetpoint.Position.North - optiPositionState.North;
 		float erre = optiSetpoint.Position.East - optiPositionState.East;
-		desired_veln = pid_apply(&stabSettings.positionPids[0],errn,dT);
-		desired_vele = pid_apply(&stabSettings.positionPids[1],erre,dT);
+		
+		float originalVx = pid_apply(&stabSettings.positionPids[0],errn,dT);
+		float originalVy = pid_apply(&stabSettings.positionPids[1],erre,dT);
+
+		// opti coord 2 yaw coord
+		desired_veln = originalVx * cosyaw + originalVy * sinyaw;
+		desired_vele = originalVy * cosyaw - originalVx * sinyaw;
 	}
 	VelocityControl(desired_veln,desired_vele,dT);
-	
 	
 }
 

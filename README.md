@@ -90,7 +90,22 @@ UPSTREAM_VER         := 16.09  #$(subst -,~,$(subst RELEASE-,,$(PACKAGE_LBL)))
  # VIProductVersion ${VERSION_FOUR_NUM}
 VIProductVersion "2.46.0.0"
 ```
+6. 打包make package 时出现如下错误：
+
+   ```
+   dpkg-shlibdeps: 错误: no dependency information found for /home/xindong324/Qt5.12.11/5.12.11/gcc_64/lib/libQt5Widgets.so.5 (used by debian/librepilot/usr/lib/librepilot-gcs/libQScienceSpinBox.so.1.0.0)
+   ```
+
+   主要原因是系统安装了多个版本的Qt，默认Qt库是default.config中的Qt9.5, 因此在构建安装包时需要切换Qt版本为5.9
+   
+   ```
+   export QT_SELECT=qt5
+   ```
+   
+   
+
 # uavobject 定义的注意事项
+
 ## 定义单个变量，数组和结构体的区别：
 1. 定义变量, elements="1"
 ```
@@ -150,3 +165,9 @@ uavobject中Flightmodesettings.xml关于Stabilization1Settings定义了每个通
 ALL_BOARDS    := coptercontrol oplinkmini revolution osd revoproto simposix discoveryf4bare gpsplatinum revonano sparky2
 ```
 3. NB: 这样无法编译地面站
+
+
+
+# 调试使用注意事项
+
+* 在配合mocap使用mavlink时，需要在地面站 configuration -> hardware 中将MainPort设置为Mavlink，同时在System->设置->HwSetting中将Mainport波特率设置为115200

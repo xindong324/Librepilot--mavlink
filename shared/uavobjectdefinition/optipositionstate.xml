@@ -4,6 +4,9 @@
         <field name="North" units="m" type="float" elements="1"/>
         <field name="East" units="m" type="float" elements="1"/>
         <field name="Down" units="m" type="float" elements="1"/>
+        <field name="Roll" units="rad" type="float" elements="1"/>
+        <field name="Pitch" units="rad" type="float" elements="1"/>
+        <field name="Yaw" units="rad" type="float" elements="1"/> 
         <field name="OptiDataVaild" units="" type="enum" elements="1" options="False,True" defaultvalue="False"
                description="isOptiData vaild"/> 
         <access gcs="readwrite" flight="readwrite"/>

@@ -54,11 +54,13 @@ extern "C" {
 #define NEUTRALTHRUST_START_DELAY               (2 * 20) // 2 seconds at rate of 20Hz (50ms update rate)
 #define NEUTRALTHRUST_END_COUNT                 (NEUTRALTHRUST_START_DELAY + (4 * 20))  // 4 second sample
 
+#define DEFAULT_PID_INTEGRATION_LIMIT 0.5f
+
 
 PIDControlDown::PIDControlDown()
     : deltaTime(0.0f), mVelocitySetpointTarget(0.0f), mVelocitySetpointCurrent(0.0f), mVelocityState(0.0f), mDownCommand(0.0f),
     mCallback(NULL), mNeutral(0.5f), mVelocityMax(1.0f), mPositionSetpointTarget(0.0f), mPositionState(0.0f),
-    mMinThrust(0.1f), mMaxThrust(0.6f), mActive(false), mAllowNeutralThrustCalc(true)
+    mMinThrust(0.1f), mMaxThrust(0.6f), mMidTrust(0.5f), mActive(false), mAllowNeutralThrustCalc(true)
 {
     Deactivate();
 }
@@ -120,8 +122,20 @@ void PIDControlDown::UpdateParameters(float kp, float ki, float kd, float beta, 
     }
 
     pid2_configure(&PID, kp, ki, kd, Tf, kt, dT, beta, mNeutral, mNeutral, -1.0f);
+	pid_configure(&PIDvel, kp, ki, kd, DEFAULT_PID_INTEGRATION_LIMIT);
     deltaTime    = dT;
     mVelocityMax = velocityMax;
+}
+
+void PIDControlDown::UpdateMidTrustConfig(float trust)
+{
+    mMidTrust = trust;
+}
+
+
+void PIDControlDown::UpdateVelParameters(float kp,float ki, float kd)
+{
+    pid_configure(&PIDvel, kp, ki, kd, DEFAULT_PID_INTEGRATION_LIMIT);
 }
 
 
@@ -148,6 +162,17 @@ void PIDControlDown::ControlPosition()
     UpdateVelocitySetpoint(velDown);
 
     run_neutralThrustCalc();
+}
+
+void PIDControlDown::ControlPosition2()
+{
+    // Current progress location relative to end
+    float velDown = 0.0f;
+
+    velDown = pid_apply(&PIDpos, mPositionSetpointTarget - mPositionState, deltaTime);
+    UpdateVelocitySetpoint(velDown);
+
+    //run_neutralThrustCalc();
 }
 
 
@@ -256,6 +281,13 @@ void PIDControlDown::UpdateNeutralThrust(float neutral)
     mNeutral = neutral;
 }
 
+/*
+void PIDControlDown::UpdateVelParameters(float kp, float ki, float kd,  float dT)
+{
+    pid_configure(&PIDvel, kp, 0.0f, 0.0f, 0.0f);
+}
+*/
+
 void PIDControlDown::UpdateVelocitySetpoint(float setpoint)
 {
     mVelocitySetpointTarget = setpoint;
@@ -340,6 +372,18 @@ void PIDControlDown::UpdateVelocityState(float pv)
     }
 }
 
+
+// Update velocity state called per dT. Also update current
+// desired velocity
+void PIDControlDown::UpdateVelocityState2(float pv)
+{
+    mVelocityState = pv;
+
+    mVelocitySetpointCurrent = mVelocitySetpointTarget;
+    
+}
+
+
 float PIDControlDown::GetVelocityDesired(void)
 {
     return mVelocitySetpointCurrent;
@@ -357,3 +401,15 @@ float PIDControlDown::GetDownCommand(void)
     mDownCommand = downCommand;
     return mDownCommand;
 }
+
+float PIDControlDown::GetDownCommand2(void)
+{
+    float ulow  = mMinThrust;
+    float uhigh = mMaxThrust;
+
+    float downCommand = mMidTrust + pid_apply(&PIDvel, mVelocitySetpointCurrent-mVelocityState, deltaTime);
+	
+	mDownCommand = boundf(downCommand,ulow,uhigh);
+    return mDownCommand;
+}
+
