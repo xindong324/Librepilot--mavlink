@@ -41,6 +41,7 @@ extern "C" {
 #include <paths.h>
 #include "plans.h"
 #include <stabilizationdesired.h>
+#include <attitudestate.h>
 #include <vtolselftuningstats.h>
 }
 
@@ -80,6 +81,8 @@ void PIDControlDown::SetThrustLimits(float min_thrust, float max_thrust)
 
 void PIDControlDown::Deactivate()
 {
+	pid_zero(&PIDvel);
+
     mActive = false;
 }
 
@@ -150,7 +153,7 @@ void PIDControlDown::UpdatePositionSetpoint(float setpointDown)
 void PIDControlDown::UpdatePositionState(float pvDown)
 {
     mPositionState = pvDown;
-    setup_neutralThrustCalc();
+    //setup_neutralThrustCalc();
 }
 // This is a pure position hold position control
 void PIDControlDown::ControlPosition()
@@ -170,7 +173,8 @@ void PIDControlDown::ControlPosition2()
     float velDown = 0.0f;
 
     velDown = pid_apply(&PIDpos, mPositionSetpointTarget - mPositionState, deltaTime);
-    UpdateVelocitySetpoint(velDown);
+	//DEBUG_PRINTF(2,"p_sp:%d, p_st:%d, dv up:%d\n",(int)(mPositionSetpointTarget*100.f),(int)(mPositionState*100.f),(int)(velDown*1000.f));
+    UpdateVelocitySetpoint2(velDown);
 
     //run_neutralThrustCalc();
 }
@@ -297,6 +301,16 @@ void PIDControlDown::UpdateVelocitySetpoint(float setpoint)
     }
 }
 
+void PIDControlDown::UpdateVelocitySetpoint2(float setpoint)
+{
+    mVelocitySetpointTarget = setpoint;
+    if (fabsf(mVelocitySetpointTarget) > mVelocityMax) {
+        // maintain sign but set to max
+        mVelocitySetpointTarget *= mVelocityMax / fabsf(mVelocitySetpointTarget);
+    }
+	mVelocitySetpointCurrent = mVelocitySetpointTarget;
+}
+
 void PIDControlDown::RateLimit(float *spDesired, float *spCurrent, float rateLimit)
 {
     float velocity_delta = *spDesired - *spCurrent;
@@ -379,7 +393,7 @@ void PIDControlDown::UpdateVelocityState2(float pv)
 {
     mVelocityState = pv;
 
-    mVelocitySetpointCurrent = mVelocitySetpointTarget;
+    //mVelocitySetpointCurrent = mVelocitySetpointTarget;
     
 }
 
@@ -393,6 +407,7 @@ float PIDControlDown::GetDownCommand(void)
 {
     float ulow  = mMinThrust;
     float uhigh = mMaxThrust;
+	
 
     if (mCallback) {
         mCallback->BoundThrust(ulow, uhigh);
@@ -407,8 +422,16 @@ float PIDControlDown::GetDownCommand2(void)
     float ulow  = mMinThrust;
     float uhigh = mMaxThrust;
 
-    float downCommand = mMidTrust + pid_apply(&PIDvel, mVelocitySetpointCurrent-mVelocityState, deltaTime);
+	AttitudeStateData attitudeState;
+    AttitudeStateGet(&attitudeState);
+
+	float cos_roll_ = cosf(DEG2RAD(attitudeState.Roll));
+	float cos_pitch_ = cosf(DEG2RAD(attitudeState.Pitch));
+
+	float down_trust = pid_apply(&PIDvel, mVelocitySetpointCurrent-mVelocityState, deltaTime);
 	
+	DEBUG_PRINTF(2,"dv_up:%d, d_trust:%d, mid_t:%d\n",(int)(mVelocitySetpointCurrent*100.f),(int)(down_trust*100.f),(int)(mMidTrust*100.f));
+    float downCommand = mMidTrust + down_trust/(cos_roll_*cos_pitch_);
 	mDownCommand = boundf(downCommand,ulow,uhigh);
     return mDownCommand;
 }

@@ -121,7 +121,7 @@ float stabilizationAltitudeHold(float setpoint, ThrustModeType mode, bool reinit
     }
     */
 	// thrust demand is provided by the func :: altitudetask 
-    thrustDemand = boundf(thrustDemand, altitudeHoldSettings.ThrustLimits.Min, altitudeHoldSettings.ThrustLimits.Max);
+    //thrustDemand = boundf(thrustDemand, altitudeHoldSettings.ThrustLimits.Min, altitudeHoldSettings.ThrustLimits.Max);
 	if(newaltitude) newaltitude = true;
     return thrustDemand;
     
@@ -144,8 +144,19 @@ static void altitudeHoldTask(void)
     if (!controlDown.IsActive()) {
         return;
     }
-	DEBUG_PRINTF(2,"in Altitude\n");
 
+	
+	//DEBUG_PRINTF(2,"in Altitude\n");
+	// check if optidata received
+	OptiPositionStateOptiDataVaildOptions optiStateValid;
+	OptiPositionStateOptiDataVaildGet(&optiStateValid);
+
+	if(optiStateValid == OPTIPOSITIONSTATE_OPTIDATAVAILD_FALSE)
+	{// if data invalid, return;
+		thrustDemand = 0.f;
+		return;
+	}
+	
     AltitudeHoldStatusData altitudeHoldStatus;
     AltitudeHoldStatusGet(&altitudeHoldStatus);
 
@@ -162,11 +173,17 @@ static void altitudeHoldTask(void)
 	desiredPositionDown = optiSetpointState.Position.Down;
 	
     VelocityStateDownGet(&velocityStateDown);
-    controlDown.UpdateVelocityState(-velocityStateDown);
+    controlDown.UpdateVelocityState2(-velocityStateDown);
 
     float local_thrustDemand = 0.0f;
 	//trans into up positive
 	float desiredVelocityUp = -optiSetpointState.Velocity.Down;
+
+	if(optiSetpointMode.Down == OPTISETPOINT_OPTISETPOINTMODE_DISABLE)
+	{
+		thrustDemand = 0.f;
+		return;
+	}
 
 	if(optiSetpointMode.Down == OPTISETPOINT_OPTISETPOINTMODE_POSITION)
 	{
@@ -177,10 +194,13 @@ static void altitudeHoldTask(void)
 		controlDown.UpdatePositionState(-positionStateDown);
 		controlDown.UpdatePositionSetpoint(-desiredPositionDown);
 		controlDown.ControlPosition2();
+		
 		desiredVelocityUp = controlDown.GetVelocityDesired();
-		altitudeHoldStatus.VelocityDesired = desiredVelocityUp;
+		 //DEBUG_PRINTF(2,"dv up:%d\n",(int)(desiredVelocityUp*100.f));
+		
 	}
-	controlDown.UpdateVelocitySetpoint(desiredVelocityUp);
+	altitudeHoldStatus.VelocityDesired = desiredVelocityUp;
+	controlDown.UpdateVelocitySetpoint2(desiredVelocityUp);
 	local_thrustDemand = controlDown.GetDownCommand2();
 
     thrustDemand = local_thrustDemand;
@@ -213,7 +233,6 @@ void stabilizationAltitudeloopInit()
     VtolSelfTuningStatsConnectCallback(&SettingsUpdatedCb);
     SettingsUpdatedCb(NULL);
 
-	
 
     altitudeHoldCBInfo = PIOS_CALLBACKSCHEDULER_Create(&altitudeHoldTask, CALLBACK_PRIORITY, CBTASK_PRIORITY, CALLBACKINFO_RUNNING_ALTITUDEHOLD, STACK_SIZE_BYTES);
     VelocityStateConnectCallback(&VelocityStateUpdatedCb);
@@ -226,11 +245,8 @@ static void SettingsUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 	OptiSetpointSettingsGet(&optiSetpointSettings);
 	MaxSpeedDown = optiSetpointSettings.OptiSpeedMax.Down;
 	MaxSpeedUp = MaxSpeedDown*0.6f;
-	if(fabs(optiSetpointSettings.Trust - mid_stick_set)>=1e-3)
-	{
-		mid_stick_set = optiSetpointSettings.Trust;
-		controlDown.UpdateMidTrustConfig(mid_stick_set);
-	}
+	
+	controlDown.UpdateMidTrustConfig(mid_stick_set);
 	
 	AltitudeHoldSettingsGet(&altitudeHoldSettings);
 

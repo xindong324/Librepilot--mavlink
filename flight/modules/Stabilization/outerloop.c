@@ -64,6 +64,11 @@
 #define UPDATE_MAX        1.0f
 #define UPDATE_ALPHA      1.0e-2f
 
+#define CONSTANT_ONE_GRAVITY 9.81f
+#define ACC_XY_MAX 10.f
+
+#define POS_XY_CONTROL
+
 // Private variables
 static DelayedCallbackInfo *callbackHandle;
 static AttitudeStateData attitude;
@@ -80,7 +85,10 @@ static void stabilizationOuterloopTask();
 static void AttitudeStateUpdatedCb(__attribute__((unused)) UAVObjEvent *ev);
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 
-static void PositionHoldXY(float dT);
+#ifdef POS_XY_CONTROL
+static void PositionHoldXY( float dT);
+static void DisablePositionHoldXY();
+#endif
 
 #endif
 
@@ -121,6 +129,9 @@ static void stabilizationOuterloopTask()
     StabilizationStatusOuterLoopData enabled;
 	FlightStatusData flightStatus;
 
+	OptiPositionStateData optiPositionState;
+	OptiPositionStateGet(&optiPositionState);
+
 
     AttitudeStateGet(&attitudeState);
     StabilizationDesiredGet(&stabilizationDesired);
@@ -134,18 +145,35 @@ static void stabilizationOuterloopTask()
     StabilizationStatusOuterLoopOptions newThrustMode = StabilizationStatusOuterLoopToArray(enabled)[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
     bool reinit = (newThrustMode != previous_mode[STABILIZATIONSTATUS_OUTERLOOP_THRUST]);
 	
-
+	
 	
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 	uint8_t new_mode = flightStatus.FlightMode;
+	
 	// TODO: adjust position
 	if(new_mode == FLIGHTSTATUS_FLIGHTMODE_STABILIZED2)
 	{
+		float desired_roll,desired_pitch;
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationAltitudeHold(stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST], ALTITUDEHOLD, reinit);
+		// pos xy ctrl
 		PositionHoldXY(dT);
+		StabilizationDesiredRollGet(&desired_roll);
+		StabilizationDesiredPitchGet(&desired_pitch);
+		stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_ROLL] = desired_roll;
+		stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_PITCH] = desired_pitch;
+		if(fabsf(optiPositionState.North)>2.0f||fabsf(optiPositionState.East)>2.0f||optiPositionState.Down<=-2.0f)
+		{
+		    rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = 0;//stabilizationAltitudeHold(stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST], ALTITUDEHOLD, reinit);
+		}
+
+		// end pos ctrl
+		
 	}else
 	{
 		stabilizationDisableAltitudeHold();
+	#ifdef POS_XY_CONTROL
+		DisablePositionHoldXY();
+	#endif
 		rateDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST] = stabilizationDesiredAxis[STABILIZATIONSTATUS_OUTERLOOP_THRUST];
 		
 	}
@@ -409,6 +437,33 @@ static void stabilizationOuterloopTask()
 }
 #ifndef PIOS_EXCLUDE_ADVANCED_FEATURES
 
+#ifdef POS_XY_CONTROL
+static void AccelControl(float desired_acceln,float desired_accele)
+{
+	//CONSTANT_ONE_GRAVITY
+	AttitudeStateData attitudeState;
+	AttitudeStateGet(&attitudeState);
+
+	float cos_yaw = cosf(DEG2RAD(attitudeState.Yaw));
+	float sin_yaw = sinf(DEG2RAD(attitudeState.Yaw));
+	
+	float desired_accel_forward= desired_acceln * cos_yaw + desired_accele*sin_yaw;
+	float desired_accel_right = -desired_acceln * sin_yaw + desired_accele*cos_yaw;
+
+	// assume down accel is one g up = -9.81, calcuate lean angle
+	float desired_pitch_angle_rad = -atanf(desired_accel_forward/CONSTANT_ONE_GRAVITY);
+	float desired_roll_angle_rad = atanf(desired_accel_right*cosf(-desired_pitch_angle_rad)/CONSTANT_ONE_GRAVITY); 
+
+	float desired_roll = RAD2DEG(desired_roll_angle_rad);
+	float desired_pitch = RAD2DEG(desired_pitch_angle_rad);
+	desired_roll = boundf(desired_roll, -stabSettings.stabBank.RollMax, stabSettings.stabBank.RollMax);
+    desired_pitch = boundf(desired_pitch, -stabSettings.stabBank.PitchMax, stabSettings.stabBank.PitchMax);
+	
+    StabilizationDesiredRollSet(&desired_roll);
+	StabilizationDesiredPitchSet(&desired_pitch);
+}
+
+
 static void VelocityControl(float desired_veln,float desired_vele,float dT)
 {
 	OptiVelocityStateData optiVelocityState;
@@ -417,10 +472,11 @@ static void VelocityControl(float desired_veln,float desired_vele,float dT)
 	float vel_errn = desired_veln - optiVelocityState.North;
 	float vel_erre = desired_vele - optiVelocityState.East;
 	
-	float desired_roll = pid_apply(&stabSettings.velocityPids[0],vel_errn,dT);
-	float desired_pitch = pid_apply(&stabSettings.velocityPids[1],vel_erre,dT);
-	StabilizationDesiredRollSet(&desired_roll);
-	StabilizationDesiredPitchSet(&desired_pitch);
+	float desired_acceln = pid_apply(&stabSettings.velocityPids[0],vel_errn,dT);
+	desired_acceln = boundf(desired_acceln, -ACC_XY_MAX, ACC_XY_MAX);
+	float desired_accele = pid_apply(&stabSettings.velocityPids[1],vel_erre,dT);
+	desired_accele = boundf(desired_accele, -ACC_XY_MAX, ACC_XY_MAX);
+	AccelControl(desired_acceln,desired_accele);
 }
 
 static void PositionHoldXY(float dT)
@@ -434,8 +490,8 @@ static void PositionHoldXY(float dT)
 	OptiPositionStateGet(&optiPositionState);
 	OptiSetpointGet(&optiSetpoint);
 
-	float cosyaw = cosf(optiPositionState.Yaw);
-	float sinyaw = sinf(optiPositionState.Yaw);
+	//float cosyaw = cosf(optiPositionState.Yaw);
+	//float sinyaw = sinf(optiPositionState.Yaw);
 	
 	desired_veln = optiSetpoint.Velocity.North;
 	desired_vele = optiSetpoint.Velocity.East;
@@ -456,14 +512,25 @@ static void PositionHoldXY(float dT)
 		float originalVy = pid_apply(&stabSettings.positionPids[1],erre,dT);
 
 		// opti coord 2 yaw coord
-		desired_veln = originalVx * cosyaw + originalVy * sinyaw;
-		desired_vele = originalVy * cosyaw - originalVx * sinyaw;
+		desired_veln = originalVx;
+		desired_vele = originalVy;
 	}
 	VelocityControl(desired_veln,desired_vele,dT);
 	
 }
 
+static void DisablePositionHoldXY()
+{
+  pid_zero(&stabSettings.positionPids[0]);
+  pid_zero(&stabSettings.positionPids[1]);
+
+  pid_zero(&stabSettings.velocityPids[0]);
+  pid_zero(&stabSettings.velocityPids[1]);
+}
 #endif
+
+#endif
+
 
 static void AttitudeStateUpdatedCb(__attribute__((unused)) UAVObjEvent *ev)
 {

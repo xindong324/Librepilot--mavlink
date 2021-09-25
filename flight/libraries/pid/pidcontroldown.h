@@ -68,6 +68,7 @@ public:
 	float GetDownCommand2(void);
 	void UpdateVelocityState2(float pv);
 	void ControlPosition2();
+	void UpdateVelocitySetpoint2(float setpoint);
 	void UpdateMidTrustConfig(float trust);
 	///////////////end///////////////////////////
 

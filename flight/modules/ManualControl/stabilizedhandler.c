@@ -48,13 +48,18 @@
 
 // Private functions
 static float applyExpo(float value, float expo);
-static void handlePosHold(ManualControlCommandData cmd);
+//static void handlePosHold(ManualControlCommandData cmd);
+static void handleAltHoldTest(ManualControlCommandData cmd);
+static void handleXYHold(ManualControlCommandData cmd);
+
+
 
 // Private variables
 static uint8_t currentFpvTiltAngle = 0;
 static float cosAngle = 0.0f;
 static float sinAngle = 0.0f;
 
+/*
 static bool initFlight = false; // alt/pos mode flight init
 
 // position handler variable;
@@ -64,6 +69,7 @@ static bool isAdjustingPosZ = false;
 static float errorPosX = 0.f;
 static float errorPosY = 0.f;
 static float errorPosZ = 0.f;
+*/
 
 // threshold to avoid noise when poshold;
 #define STICK_POSHOLD_THRES (0.03f)
@@ -176,7 +182,10 @@ void stabilizedHandler(__attribute__((unused)) bool newinit)
 	// handle flight mode,stablelized2 is poshold --- dxx 20210617-11.01
 	switch (flightStatus.FlightMode) {
 		case FLIGHTSTATUS_FLIGHTMODE_STABILIZED2:
-			handlePosHold(cmd);
+			//handlePosHold(cmd);
+			handleAltHoldTest(cmd);
+			handleXYHold(cmd);
+			//if stab2 continue set stabilization desired to maintain stable;
 			//return;
 		default:
     		stabilization.Roll = (stab_settings[0] == STABILIZATIONDESIRED_STABILIZATIONMODE_ATTITUDE) ? cmd.Roll * stabSettings.RollMax :
@@ -197,8 +206,85 @@ void stabilizedHandler(__attribute__((unused)) bool newinit)
 		}
 }
 
+static void handleAltHoldTest(ManualControlCommandData cmd)
+{
+	OptiSetpointData OptiSetpoint;
+	OptiSetpointSettingsData OptiSetpointSettings;
+	OptiPositionStateData OptiPositionState;
+	OptiVelocityStateData OptiVelocityState;
+	OptiSetpointSettingsGet(&OptiSetpointSettings);
+
+	OptiPositionStateGet(&OptiPositionState);
+	OptiVelocityStateGet(&OptiVelocityState);
+	OptiSetpointGet(&OptiSetpoint);
+
+	//////////////////////////z control///////////////////////////////////
+	// set in const 0.8m 
+	if(cmd.Thrust>=.5f)
+	{
+		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+		OptiSetpoint.Position.Down = -0.8f;	/*调整新位置*/	
+	}
+	else
+	{
+		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_DISABLE;
+	}
+	OptiSetpointSet(&OptiSetpoint);
+}
+
+static void handleXYHold(ManualControlCommandData cmd)
+{
+    
+	OptiSetpointData OptiSetpoint;
+	OptiSetpointSettingsData OptiSetpointSettings;
+	OptiPositionStateData OptiPositionState;
+	OptiVelocityStateData OptiVelocityState;
+	OptiSetpointSettingsGet(&OptiSetpointSettings);
+
+	OptiPositionStateGet(&OptiPositionState);
+	OptiVelocityStateGet(&OptiVelocityState);
+	OptiSetpointGet(&OptiSetpoint);
+
+	static bool isAdjustingPosXY = true;
+	static uint8_t adjustPosXYTime = 0;
+
+	///////////////////////////////////////////xy control///////////////////////
+	//int send_vel = OptiSetpointSettings.OptiSpeedMax.North*10;
+	//DEBUG_PRINTF(2,"POSE VEL %d\n",(int)(maxPosVelLimit.MaxVelocityNorth*10));
+	//DEBUG_PRINTF(2,"POSE VEL2 %d\n",send_vel);
+	// TODO: add if optidata vailable;
+	if(fabsf(cmd.Roll)>STICK_POSHOLD_THRES||fabsf(cmd.Pitch)>STICK_POSHOLD_THRES)
+	{
+		float originalVy = cmd.Roll * maxPosVelLimit.MaxVelocityNorth;
+		float originalVx = cmd.Pitch * maxPosVelLimit.MaxVelocityEast;
+		
+		adjustPosXYTime = 0;
+		isAdjustingPosXY = true;
+		
+		OptiSetpoint.OptiSetpointMode.North = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
+		OptiSetpoint.OptiSetpointMode.East = OPTISETPOINT_OPTISETPOINTMODE_VELOCITY;
+		// opti coord 2 yaw coord
+		OptiSetpoint.Velocity.North = originalVx;
+		OptiSetpoint.Velocity.East = originalVy;
+	}
+	else if(isAdjustingPosXY == true)
+	{
+		if(adjustPosXYTime++ > 100)
+		{
+			adjustPosXYTime = 0;
+			isAdjustingPosXY = false;
+		}		
+		OptiSetpoint.OptiSetpointMode.North = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+		OptiSetpoint.OptiSetpointMode.East = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
+		OptiSetpoint.Position.North = 0;//OptiPositionState.North;	//调整新位置
+		OptiSetpoint.Position.East = 0;//OptiPositionState.East;	//调整新位置
+	}
+	OptiSetpointSet(&OptiSetpoint);
+}
+
 // positionhold mannual handler, set Positiondesired;
 // cmd 
+/*
 static void handlePosHold(ManualControlCommandData cmd)
 {
 	OptiSetpointData OptiSetpoint;
@@ -215,10 +301,10 @@ static void handlePosHold(ManualControlCommandData cmd)
 	float climb = ((cmd.Thrust - .5f) / .5f); //中立位置为0.5
 	float check_deadband = climb;
 	const float DEADBAND      = 0.20f;
-    const float DEADBAND_HIGH = DEADBAND / 2.0f;
-    const float DEADBAND_LOW  =  -DEADBAND / 2.0f;
+    const float DEADBAND_HIGH = DEADBAND;
+    const float DEADBAND_LOW  =  -DEADBAND ;
 
-	DEBUG_PRINTF(2,"Pos hold: High: %d,low: %d\n",(int)(DEADBAND_HIGH*10),(int)(DEADBAND_LOW*10));
+	//DEBUG_PRINTF(2,"Pos hold: High: %d,low: %d\n",(int)(DEADBAND_HIGH*10),(int)(DEADBAND_LOW*10));
 
 	if(climb > 0.f) 
 	{
@@ -247,16 +333,17 @@ static void handlePosHold(ManualControlCommandData cmd)
 		{
 			isAdjustingPosZ = false;
 			OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
-			OptiSetpoint.Position.Down = OptiPositionState.Down + errorPosZ;	/*调整新位置*/									
+			OptiSetpoint.Position.Down = OptiPositionState.Down + errorPosZ;	//调整新位置									
 		}
-		else if(isAdjustingPosZ == false)	/*Z位移误差*/
+		else if(isAdjustingPosZ == false)	//Z位移误差
 		{
 		// TODO: test if maxPosVelLimit.MaxPositionDown is available--dxx
+			OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_POSITION;
 			errorPosZ = OptiSetpoint.Position.Down - OptiPositionState.Down;
-			errorPosZ = boundf(errorPosZ, -maxPosVelLimit.MaxPositionDown, maxPosVelLimit.MaxPositionDown);	/*误差限幅 单位m*/
+			errorPosZ = boundf(errorPosZ, -maxPosVelLimit.MaxPositionDown, maxPosVelLimit.MaxPositionDown);	//误差限幅 单位m
 		}
 	}
-	else/*着陆状态*/
+	else//着陆状态
 	{
 		OptiSetpoint.OptiSetpointMode.Down = OPTISETPOINT_OPTISETPOINTMODE_DISABLE;
 		OptiSetpoint.Trust = 0.f;
@@ -271,7 +358,7 @@ static void handlePosHold(ManualControlCommandData cmd)
 	//DEBUG_PRINTF(2,"POSE VEL %d\n",(int)(maxPosVelLimit.MaxVelocityNorth*10));
 	//DEBUG_PRINTF(2,"POSE VEL2 %d\n",send_vel);
 	// TODO: add if optidata vailable;
-	if(fabsf(cmd.Roll)>STICK_POSHOLD_THRES&&fabsf(cmd.Roll)>STICK_POSHOLD_THRES)
+	if(fabsf(cmd.Roll)>STICK_POSHOLD_THRES||fabsf(cmd.Pitch)>STICK_POSHOLD_THRES)
 	{
 		float originalVy = cmd.Roll * maxPosVelLimit.MaxVelocityNorth;
 		float originalVx = cmd.Pitch * maxPosVelLimit.MaxVelocityEast;
@@ -305,11 +392,12 @@ static void handlePosHold(ManualControlCommandData cmd)
 	{
 		errorPosX = OptiSetpoint.Position.North - OptiPositionState.North;
 		errorPosY = OptiSetpoint.Position.East - OptiPositionState.East;
-		errorPosX = boundf(errorPosX, -maxPosVelLimit.MaxPositionNorth, maxPosVelLimit.MaxPositionNorth);	/*误差限幅 单位m*/
-		errorPosY = boundf(errorPosY, -maxPosVelLimit.MaxPositionEast, maxPosVelLimit.MaxPositionEast);	/*误差限幅 单位m*/
+		errorPosX = boundf(errorPosX, -maxPosVelLimit.MaxPositionNorth, maxPosVelLimit.MaxPositionNorth);	//误差限幅 单位m
+		errorPosY = boundf(errorPosY, -maxPosVelLimit.MaxPositionEast, maxPosVelLimit.MaxPositionEast);	//误差限幅 单位m
 	}
 	OptiSetpointSet(&OptiSetpoint);
 }
+*/
 /**
  * @}
  * @}
